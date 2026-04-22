@@ -97,6 +97,7 @@ build/*
 !build/IntegrityManifest.targets
 !build/pack.ps1
 !build/publish-release.ps1
+!build/release-wizard.ps1
 
 # Local diagnostic artifacts
 .issues/

@@ -82,7 +82,7 @@ The detailed walkthrough lives in [USAGE.md](./USAGE.md).
 
 Release builds are intended to be published through GitHub Releases:
 
-- [GitHub Releases](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app/releases)
+- [GitHub Releases](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app/releases)
 
 Production installers and updates are built, signed, and uploaded from the authorized local signing PC because the code-signing certificate is backed by a hardware token. The step-by-step release process lives in [Local build and deploy guide](./documentation/build-and-deploy.md).
 
@@ -139,7 +139,7 @@ If you want to help, the most useful contributions are:
 
 Please keep changes practical and reviewable. Small, sharp pull requests beat heroic rewrites. If you change sync behavior, Explorer integration, or release/install logic, include enough context for someone else to verify it without telepathy.
 
-Please open a [GitHub Issue](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app/issues) for bug reports, ideas, compatibility notes, or larger contribution proposals. That keeps the conversation visible and gives us one place to track what needs attention.
+Please open a [GitHub Issue](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app/issues) for bug reports, ideas, compatibility notes, or larger contribution proposals. That keeps the conversation visible and gives us one place to track what needs attention.
 
 For a good starting point, read:
 
@@ -154,7 +154,7 @@ CloudDrive is licensed under the GNU General Public License v3.0. See [LICENSE](
 
 We are happy about feedback.
 
-If CloudDrive works great with your setup, tell us. If it breaks in a creative new way, definitely tell us. Issues, ideas, rough edges, server compatibility notes, and improvement suggestions are all useful and welcome through [GitHub Issues](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app/issues).
+If CloudDrive works great with your setup, tell us. If it breaks in a creative new way, definitely tell us. Issues, ideas, rough edges, server compatibility notes, and improvement suggestions are all useful and welcome through [GitHub Issues](https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app/issues).
 
 ## In One Sentence
 

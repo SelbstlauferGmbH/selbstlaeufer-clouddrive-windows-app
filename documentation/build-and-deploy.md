@@ -104,6 +104,18 @@ The release script expects a clean tree for production. Use `-AllowDirty` only f
 
 ---
 
+## Interactive Release Wizard
+
+For a guided local release, run:
+
+```powershell
+.\build\release-wizard.ps1
+```
+
+The wizard asks yes/no questions for the local release flow, offers `major` and `minor` version bump choices based on the latest `v<version>` tag, stages a signed release first, pauses for smoke testing, and then uploads the exact staged assets to GitHub Releases.
+
+---
+
 ## Step 2: Choose The Version
 
 Use SemVer:
@@ -223,7 +235,7 @@ The upload includes the final installer and every update manifest/package file n
 Open:
 
 ```text
-https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app/releases
+https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app/releases
 ```
 
 Verify:

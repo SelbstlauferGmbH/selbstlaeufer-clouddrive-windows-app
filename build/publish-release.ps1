@@ -10,7 +10,7 @@ param(
     [string]$Channel = "stable",
 
     [Parameter()]
-    [string]$RepositoryUrl = "https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app",
+    [string]$RepositoryUrl = "https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app",
 
     [Parameter()]
     [string]$OutputDir,

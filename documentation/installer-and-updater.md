@@ -126,7 +126,7 @@ This is implemented in `UpdateService`.
 The active update source is:
 
 ```text
-https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app
+https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app
 ```
 
 `UpdateService` uses `GithubSource(...)`, so GitHub Releases is the authoritative release feed.
@@ -303,7 +303,7 @@ For later releases:
 The public release source is GitHub Releases in:
 
 ```text
-https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app
+https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app
 ```
 
 The local release wrapper uploads with:

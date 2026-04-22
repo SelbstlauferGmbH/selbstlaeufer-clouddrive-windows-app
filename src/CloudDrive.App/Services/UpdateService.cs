@@ -31,7 +31,7 @@ public sealed record UpdateStatusSnapshot(
 
 public sealed class UpdateService : BackgroundService
 {
-    private const string ReleasesRepositoryUrl = "https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-app";
+    private const string ReleasesRepositoryUrl = "https://github.com/SelbstlauferGmbH/selbstlaeufer-clouddrive-windows-app";
     private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PeriodicInterval = TimeSpan.FromHours(4);
 
