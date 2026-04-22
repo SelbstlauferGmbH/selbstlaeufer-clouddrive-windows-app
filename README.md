@@ -116,7 +116,7 @@ If you want the full implementation and release details, start here:
 
 ## Who We Are
 
-CloudDrive is built by Selbstläufer GmbH, a managed server provider from Hamburg, Germany.
+CloudDrive is built by [Selbstläufer GmbH](https://selbstlaeufer.gmbh/), a managed server provider from Hamburg, Germany.
 
 We run our own datacenter infrastructure and host native applications for customers who want the comfort of modern cloud software without giving up control over where their systems live. CloudDrive started with those customers in mind: people who already trust WebDAV, but want it to feel like a current, native Windows experience instead of a compromise.
 
