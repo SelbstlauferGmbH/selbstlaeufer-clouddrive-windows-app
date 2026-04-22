@@ -243,15 +243,13 @@ function Invoke-ReleaseBuild {
         throw "Packaging script was not found: $packScript"
     }
 
-    $packArgs = @(
-        "-Version", $ReleaseVersion,
-        "-Channel", $ReleaseChannel,
-        "-OutputDir", $ReleaseOutputDir,
-        "-SignThumbprint", $Thumbprint
-    )
-
     Write-Host "Building signed Velopack release $ReleaseVersion..."
-    & $packScript @packArgs
+    & $packScript `
+        -Version $ReleaseVersion `
+        -Channel $ReleaseChannel `
+        -OutputDir $ReleaseOutputDir `
+        -SignThumbprint $Thumbprint
+
     if ($LASTEXITCODE -ne 0) {
         throw "Release packaging failed."
     }

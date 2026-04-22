@@ -275,6 +275,47 @@ function Invoke-External {
     }
 }
 
+function Format-CommandLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [Parameter()]
+        [string[]]$CommandArguments = @(),
+
+        [Parameter()]
+        [string[]]$RedactValues = @()
+    )
+
+    $displayArgs = foreach ($arg in $CommandArguments) {
+        if ($RedactValues -contains $arg) {
+            "***"
+        }
+        else {
+            $arg
+        }
+    }
+
+    return ">> $FilePath $($displayArgs -join ' ')"
+}
+
+function Write-ReleaseScriptCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$ScriptArguments,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    Write-Host ""
+    Write-Host $Description
+    Write-Host (Format-CommandLine -FilePath $ScriptPath -CommandArguments $ScriptArguments)
+}
+
 function Get-GitOutput {
     param([string[]]$CommandArguments)
 
@@ -501,10 +542,12 @@ function Ensure-ReleaseTag {
         }
 
         if (-not (Test-GitTagExists -TagName $TagName)) {
-            Invoke-External `
-                -FilePath (Require-Command "git") `
-                -CommandArguments ([string[]]@("fetch", "origin", "refs/tags/${TagName}:refs/tags/${TagName}")) `
-                -Description "Fetching existing release tag"
+            $fetchTagInvocation = @{
+                FilePath = Require-Command "git"
+                CommandArguments = [string[]]@("fetch", "origin", "refs/tags/${TagName}:refs/tags/${TagName}")
+                Description = "Fetching existing release tag"
+            }
+            Invoke-External @fetchTagInvocation
         }
 
         Assert-LocalTagPointsAtHead -TagName $TagName
@@ -521,17 +564,21 @@ function Ensure-ReleaseTag {
             throw "Release tag is required."
         }
 
-        Invoke-External `
-            -FilePath (Require-Command "git") `
-            -CommandArguments ([string[]]@("tag", $TagName)) `
-            -Description "Creating local release tag"
+        $createTagInvocation = @{
+            FilePath = Require-Command "git"
+            CommandArguments = [string[]]@("tag", $TagName)
+            Description = "Creating local release tag"
+        }
+        Invoke-External @createTagInvocation
     }
 
     if (Read-YesNo -Question "Push tag $TagName to origin now?" -DefaultYes $true) {
-        Invoke-External `
-            -FilePath (Require-Command "git") `
-            -CommandArguments ([string[]]@("push", "origin", $TagName)) `
-            -Description "Pushing release tag"
+        $pushTagInvocation = @{
+            FilePath = Require-Command "git"
+            CommandArguments = [string[]]@("push", "origin", $TagName)
+            Description = "Pushing release tag"
+        }
+        Invoke-External @pushTagInvocation
     }
     else {
         Write-Warning "The GitHub release upload expects the tag to exist on origin."
@@ -583,10 +630,9 @@ function Ensure-GitHubToken {
     $env:GH_TOKEN = Read-SecretValue -Prompt "GitHub token"
 }
 
-function New-ReleaseScriptArguments {
+function New-StageReleaseDisplayArguments {
     param(
         [string]$Version,
-        [switch]$ForUpload,
         [string]$Thumbprint,
         [bool]$AllowDirty,
         [bool]$DownloadPrevious,
@@ -601,23 +647,18 @@ function New-ReleaseScriptArguments {
         "-OutputDir", $OutputDir
     )
 
-    if ($ForUpload) {
-        $scriptArgs += "-SkipBuild"
+    $scriptArgs += @("-SignThumbprint", $Thumbprint, "-NoUpload")
+
+    if (-not $DownloadPrevious) {
+        $scriptArgs += "-SkipPreviousDownload"
     }
-    else {
-        $scriptArgs += @("-SignThumbprint", $Thumbprint, "-NoUpload")
 
-        if (-not $DownloadPrevious) {
-            $scriptArgs += "-SkipPreviousDownload"
-        }
+    if (-not $ClearOutput) {
+        $scriptArgs += "-KeepOutput"
+    }
 
-        if (-not $ClearOutput) {
-            $scriptArgs += "-KeepOutput"
-        }
-
-        if ($FailOnPreviousDownloadError) {
-            $scriptArgs += "-FailOnPreviousDownloadError"
-        }
+    if ($FailOnPreviousDownloadError) {
+        $scriptArgs += "-FailOnPreviousDownloadError"
     }
 
     if ($AllowDirty) {
@@ -625,6 +666,105 @@ function New-ReleaseScriptArguments {
     }
 
     return [string[]]$scriptArgs
+}
+
+function New-UploadReleaseDisplayArguments {
+    param(
+        [string]$Version,
+        [bool]$AllowDirty
+    )
+
+    $scriptArgs = @(
+        "-Version", $Version,
+        "-Channel", $Channel,
+        "-RepositoryUrl", $RepositoryUrl,
+        "-OutputDir", $OutputDir,
+        "-SkipBuild"
+    )
+
+    if ($AllowDirty) {
+        $scriptArgs += "-AllowDirty"
+    }
+
+    return [string[]]$scriptArgs
+}
+
+function Invoke-StageRelease {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Thumbprint,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$AllowDirty,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$DownloadPrevious,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$ClearOutput,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$FailOnPreviousDownloadError
+    )
+
+    $displayArgs = New-StageReleaseDisplayArguments `
+        -Version $Version `
+        -Thumbprint $Thumbprint `
+        -AllowDirty $AllowDirty `
+        -DownloadPrevious $DownloadPrevious `
+        -ClearOutput $ClearOutput `
+        -FailOnPreviousDownloadError $FailOnPreviousDownloadError
+
+    Write-ReleaseScriptCommand `
+        -ScriptPath $ScriptPath `
+        -ScriptArguments $displayArgs `
+        -Description "Building signed release assets"
+
+    & $ScriptPath `
+        -Version $Version `
+        -Channel $Channel `
+        -RepositoryUrl $RepositoryUrl `
+        -OutputDir $OutputDir `
+        -SignThumbprint $Thumbprint `
+        -NoUpload `
+        -SkipPreviousDownload:(-not $DownloadPrevious) `
+        -KeepOutput:(-not $ClearOutput) `
+        -FailOnPreviousDownloadError:$FailOnPreviousDownloadError `
+        -AllowDirty:$AllowDirty
+}
+
+function Invoke-UploadRelease {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$AllowDirty
+    )
+
+    $displayArgs = New-UploadReleaseDisplayArguments -Version $Version -AllowDirty $AllowDirty
+
+    Write-ReleaseScriptCommand `
+        -ScriptPath $ScriptPath `
+        -ScriptArguments $displayArgs `
+        -Description "Uploading tested assets to GitHub Releases"
+
+    & $ScriptPath `
+        -Version $Version `
+        -Channel $Channel `
+        -RepositoryUrl $RepositoryUrl `
+        -OutputDir $OutputDir `
+        -SkipBuild `
+        -AllowDirty:$AllowDirty
 }
 
 Push-Location $script:RepoRoot
@@ -639,10 +779,12 @@ try {
     Get-GitOutput -CommandArguments @("rev-parse", "--is-inside-work-tree") | Out-Null
 
     if (Read-YesNo -Question "Fetch tags from origin before choosing the next version?" -DefaultYes $true) {
-        Invoke-External `
-            -FilePath (Require-Command "git") `
-            -CommandArguments ([string[]]@("fetch", "--tags", "origin")) `
-            -Description "Fetching release tags"
+        $fetchTagsInvocation = @{
+            FilePath = Require-Command "git"
+            CommandArguments = [string[]]@("fetch", "--tags", "origin")
+            Description = "Fetching release tags"
+        }
+        Invoke-External @fetchTagsInvocation
     }
 
     $repository = Get-GitHubRepositoryInfo -RepoUrl $RepositoryUrl
@@ -704,10 +846,12 @@ try {
     if (-not $SkipTests) {
         if (Read-YesNo -Question "Run the Release test suite now?" -DefaultYes $true) {
             try {
-                Invoke-External `
-                    -FilePath (Require-Command "dotnet") `
-                    -CommandArguments ([string[]]@("test", "CloudDrive.sln", "-c", "Release")) `
-                    -Description "Running Release tests"
+                $testInvocation = @{
+                    FilePath = Require-Command "dotnet"
+                    CommandArguments = [string[]]@("test", "CloudDrive.sln", "-c", "Release")
+                    Description = "Running Release tests"
+                }
+                Invoke-External @testInvocation
             }
             catch {
                 Write-Warning $_.Exception.Message
@@ -740,18 +884,14 @@ try {
     }
 
     $publishScript = Join-Path $script:RepoRoot "build\publish-release.ps1"
-    $stageArgs = New-ReleaseScriptArguments `
+    Invoke-StageRelease `
+        -ScriptPath $publishScript `
         -Version $version `
         -Thumbprint $thumbprint `
         -AllowDirty $allowDirty `
         -DownloadPrevious $downloadPrevious `
         -ClearOutput $clearOutput `
         -FailOnPreviousDownloadError $failOnPreviousDownloadError
-
-    Invoke-External `
-        -FilePath $publishScript `
-        -CommandArguments ([string[]]$stageArgs) `
-        -Description "Building signed release assets"
 
     Write-Host ""
     Write-Host "Staged release assets:"
@@ -784,18 +924,10 @@ try {
     }
 
     Ensure-GitHubToken
-    $uploadArgs = New-ReleaseScriptArguments `
+    Invoke-UploadRelease `
+        -ScriptPath $publishScript `
         -Version $version `
-        -ForUpload `
-        -AllowDirty $allowDirty `
-        -DownloadPrevious $true `
-        -ClearOutput $true `
-        -FailOnPreviousDownloadError $false
-
-    Invoke-External `
-        -FilePath $publishScript `
-        -CommandArguments ([string[]]$uploadArgs) `
-        -Description "Uploading tested assets to GitHub Releases"
+        -AllowDirty $allowDirty
 
     Write-Host ""
     Write-Host "Release $tagName uploaded successfully."
