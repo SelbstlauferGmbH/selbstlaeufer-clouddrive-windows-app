@@ -314,7 +314,13 @@ vpk upload github --publish --merge
 
 This keeps release assets, manifests, and channel metadata aligned with Velopack's expectations.
 
-GitHub upload requires a token on the release PC. Use either:
+GitHub upload requires write access on the release PC. The scripts first try an authenticated GitHub CLI session:
+
+```powershell
+gh auth login
+```
+
+If GitHub CLI is not available, use either:
 
 - `GH_TOKEN`
 - `GITHUB_TOKEN`
@@ -379,7 +385,7 @@ Check:
 
 Check:
 
-- `GH_TOKEN` or `GITHUB_TOKEN` is set in the current shell
+- GitHub CLI is authenticated with `gh auth login`, or `GH_TOKEN` / `GITHUB_TOKEN` is set in the current shell
 - the token can write release contents for the public repository
 - the local tag exists and matches the version
 - the tag has been pushed to `origin`

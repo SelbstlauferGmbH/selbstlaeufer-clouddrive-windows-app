@@ -16,10 +16,7 @@ param(
     [string]$GitHubToken,
 
     [Parameter()]
-    [switch]$SkipTests,
-
-    [Parameter()]
-    [switch]$SkipFetchTags
+    [switch]$SkipTests
 )
 
 Set-StrictMode -Version Latest
@@ -87,6 +84,25 @@ function Read-RequiredValue {
     }
 }
 
+function Read-SecretValue {
+    param([Parameter(Mandatory = $true)][string]$Prompt)
+
+    while ($true) {
+        $secure = Read-Host -Prompt $Prompt -AsSecureString
+        if ($secure.Length -gt 0) {
+            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try {
+                return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            }
+            finally {
+                [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+        }
+
+        Write-Host "A value is required."
+    }
+}
+
 function Test-SemVer {
     param([string]$Value)
 
@@ -96,7 +112,7 @@ function Test-SemVer {
 function ConvertTo-SemVerParts {
     param([string]$Value)
 
-    $match = [regex]::Match($Value, "^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)")
+    $match = [regex]::Match($Value, "^v?(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)")
     if (-not $match.Success) {
         throw "Version '$Value' is not a valid semantic version."
     }
@@ -107,6 +123,43 @@ function ConvertTo-SemVerParts {
         Patch = [int]$match.Groups["patch"].Value
         Text = "$($match.Groups["major"].Value).$($match.Groups["minor"].Value).$($match.Groups["patch"].Value)"
     }
+}
+
+function Compare-SemVer {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Left,
+
+        [Parameter(Mandatory = $true)]
+        $Right
+    )
+
+    foreach ($property in @("Major", "Minor", "Patch")) {
+        if ($Left.$property -gt $Right.$property) {
+            return 1
+        }
+
+        if ($Left.$property -lt $Right.$property) {
+            return -1
+        }
+    }
+
+    return 0
+}
+
+function Get-HighestSemVer {
+    param([object[]]$Versions)
+
+    if ($null -eq $Versions -or $Versions.Count -eq 0) {
+        return $null
+    }
+
+    return $Versions |
+        Sort-Object `
+            @{ Expression = { $_.Major }; Descending = $true },
+            @{ Expression = { $_.Minor }; Descending = $true },
+            @{ Expression = { $_.Patch }; Descending = $true } |
+        Select-Object -First 1
 }
 
 function New-BumpedVersion {
@@ -126,7 +179,7 @@ function New-BumpedVersion {
     return "$($BaseVersion.Major).$($BaseVersion.Minor + 1).0"
 }
 
-function Select-UpdateType {
+function Select-ReleaseVersion {
     param($BaseVersion)
 
     $minorVersion = New-BumpedVersion -BaseVersion $BaseVersion -UpdateType "minor"
@@ -140,13 +193,33 @@ function Select-UpdateType {
     while ($true) {
         $choice = Read-Host "Select 1 or 2 [1]"
         if ([string]::IsNullOrWhiteSpace($choice)) {
-            return "minor"
+            $choice = "1"
         }
 
-        switch ($choice.Trim()) {
-            "1" { return "minor" }
-            "2" { return "major" }
-            default { Write-Host "Please select 1 for minor or 2 for major." }
+        $proposedVersion = switch ($choice.Trim()) {
+            "1" { $minorVersion }
+            "2" { $majorVersion }
+            default {
+                Write-Host "Please select 1 for minor or 2 for major."
+                $null
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($proposedVersion)) {
+            continue
+        }
+
+        if (Read-YesNo -Question "Use release version ${proposedVersion}?" -DefaultYes $true) {
+            return $proposedVersion
+        }
+
+        while ($true) {
+            $customVersion = Read-RequiredValue -Prompt "Enter release version"
+            if (Test-SemVer -Value $customVersion) {
+                return $customVersion
+            }
+
+            Write-Host "Please enter a valid semantic version, for example 1.2.0."
         }
     }
 }
@@ -162,25 +235,13 @@ function Require-Command {
     return $command.Source
 }
 
-function Get-GitOutput {
-    param([string[]]$Arguments)
-
-    $git = Require-Command "git"
-    $output = @(& $git @Arguments)
-    if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed."
-    }
-
-    return $output
-}
-
-function Invoke-CommandLine {
+function Invoke-External {
     param(
         [Parameter(Mandatory = $true)]
         [string]$FilePath,
 
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments,
+        [Parameter()]
+        [string[]]$CommandArguments = @(),
 
         [Parameter(Mandatory = $true)]
         [string]$Description,
@@ -192,7 +253,7 @@ function Invoke-CommandLine {
     Write-Host ""
     Write-Host $Description
 
-    $displayArgs = foreach ($arg in $Arguments) {
+    $displayArgs = foreach ($arg in $CommandArguments) {
         if ($RedactValues -contains $arg) {
             "***"
         }
@@ -207,11 +268,23 @@ function Invoke-CommandLine {
         ".ps1",
         [System.StringComparison]::OrdinalIgnoreCase)
 
-    & $FilePath @Arguments
+    & $FilePath @CommandArguments
 
     if (-not $isPowerShellScript -and $LASTEXITCODE -ne 0) {
         throw "$Description failed with exit code $LASTEXITCODE."
     }
+}
+
+function Get-GitOutput {
+    param([string[]]$CommandArguments)
+
+    $git = Require-Command "git"
+    $output = @(& $git @CommandArguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($CommandArguments -join ' ') failed."
+    }
+
+    return $output
 }
 
 function Resolve-WorkspacePath {
@@ -224,28 +297,160 @@ function Resolve-WorkspacePath {
     return [System.IO.Path]::GetFullPath((Join-Path $script:RepoRoot $Path))
 }
 
-function Get-LatestReleaseVersionFromGitTags {
-    $versions = @()
-    $tags = Get-GitOutput -Arguments @("tag", "--list", "v*")
+function Get-GitHubRepositoryInfo {
+    param([string]$RepoUrl)
 
-    foreach ($tag in $tags) {
-        $text = $tag.Trim()
-        if ($text -match "^v(?<version>(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))(?:$|[-+])") {
-            $parts = ConvertTo-SemVerParts -Value $matches["version"]
-            $versions += $parts
-        }
+    $trimmed = $RepoUrl.Trim().TrimEnd("/")
+    $match = [regex]::Match($trimmed, "github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$")
+    if (-not $match.Success) {
+        throw "RepositoryUrl must point to a GitHub repository, for example https://github.com/owner/repo."
     }
 
-    if ($versions.Count -eq 0) {
+    return [pscustomobject]@{
+        Owner = $match.Groups["owner"].Value
+        Repo = $match.Groups["repo"].Value
+    }
+}
+
+function Resolve-ExistingGitHubToken {
+    if (-not [string]::IsNullOrWhiteSpace($GitHubToken)) {
+        return $GitHubToken
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+        return $env:GH_TOKEN
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+        return $env:GITHUB_TOKEN
+    }
+
+    return Get-GitHubCliToken
+}
+
+function Get-GitHubCliToken {
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -eq $ghCommand) {
         return $null
     }
 
-    return $versions |
-        Sort-Object `
-            @{ Expression = { $_.Major }; Descending = $true },
-            @{ Expression = { $_.Minor }; Descending = $true },
-            @{ Expression = { $_.Patch }; Descending = $true } |
-        Select-Object -First 1
+    $tokenOutput = @(& $ghCommand.Source auth token --hostname github.com 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $tokenOutput.Count -eq 0) {
+        return $null
+    }
+
+    $token = ($tokenOutput | Select-Object -First 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        return $null
+    }
+
+    return $token
+}
+
+function Invoke-GitHubApi {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Uri,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description,
+
+        [Parameter()]
+        [switch]$AllowNotFound
+    )
+
+    $headers = @{
+        Accept = "application/vnd.github+json"
+        "User-Agent" = "CloudDriveReleaseWizard"
+    }
+
+    $token = Resolve-ExistingGitHubToken
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        $headers.Authorization = "Bearer $token"
+    }
+
+    try {
+        return Invoke-RestMethod -Uri $Uri -Headers $headers -Method Get
+    }
+    catch {
+        $response = $_.Exception.Response
+        if ($AllowNotFound -and $null -ne $response -and [int]$response.StatusCode -eq 404) {
+            return $null
+        }
+
+        throw "$Description failed. $($_.Exception.Message)"
+    }
+}
+
+function Get-GitHubReleaseVersions {
+    param($Repository)
+
+    $uri = "https://api.github.com/repos/$($Repository.Owner)/$($Repository.Repo)/releases?per_page=100"
+    $releases = Invoke-GitHubApi -Uri $uri -Description "GitHub release lookup"
+    $versions = @()
+
+    foreach ($release in @($releases)) {
+        if ($release.draft -or $release.prerelease) {
+            continue
+        }
+
+        if ($release.tag_name -match "^v?(?<version>(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))(?:$|[-+])") {
+            $parts = ConvertTo-SemVerParts -Value $matches["version"]
+            $versions += [pscustomobject]@{
+                Major = $parts.Major
+                Minor = $parts.Minor
+                Patch = $parts.Patch
+                Text = $parts.Text
+                TagName = $release.tag_name
+                Url = $release.html_url
+            }
+        }
+    }
+
+    return $versions
+}
+
+function Get-CheckedGitHubReleaseVersions {
+    param($Repository)
+
+    try {
+        return @(Get-GitHubReleaseVersions -Repository $Repository)
+    }
+    catch {
+        Write-Warning $_.Exception.Message
+        Write-Warning "The GitHub Releases check is required so the wizard can reject versions lower than origin."
+
+        if (-not (Read-YesNo -Question "Paste or use a GitHub token now and retry the release check?" -DefaultYes $true)) {
+            throw "Release cancelled because GitHub Releases could not be checked."
+        }
+
+        Ensure-GitHubToken
+        return @(Get-GitHubReleaseVersions -Repository $Repository)
+    }
+}
+
+function Test-GitHubReleaseVersionExists {
+    param(
+        [object[]]$Versions,
+        [string]$Version
+    )
+
+    return @($Versions | Where-Object { $_.Text -eq $Version }).Count -gt 0
+}
+
+function Get-ManualBaseVersion {
+    if (Read-YesNo -Question "Use 0.0.0 as the base version?" -DefaultYes $true) {
+        return ConvertTo-SemVerParts -Value "0.0.0"
+    }
+
+    while ($true) {
+        $baseText = Read-RequiredValue -Prompt "Enter the current released version"
+        if (Test-SemVer -Value $baseText) {
+            return ConvertTo-SemVerParts -Value $baseText
+        }
+
+        Write-Host "Please enter a valid semantic version, for example 0.2.0."
+    }
 }
 
 function Test-GitTagExists {
@@ -256,22 +461,80 @@ function Test-GitTagExists {
     return $LASTEXITCODE -eq 0
 }
 
-function Test-GitRemoteTagExists {
+function Get-RemoteTagCommit {
     param([string]$TagName)
 
     $git = Require-Command "git"
-    & $git ls-remote --exit-code --tags origin "refs/tags/$TagName" *> $null
-    return $LASTEXITCODE -eq 0
+    $lines = @(& $git ls-remote origin "refs/tags/$TagName" "refs/tags/$TagName^{}")
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) {
+        return $null
+    }
+
+    $peeled = $lines | Where-Object { $_ -match "refs/tags/$([regex]::Escape($TagName))\^\{\}$" } | Select-Object -First 1
+    if (-not [string]::IsNullOrWhiteSpace($peeled)) {
+        return ($peeled -split "\s+")[0]
+    }
+
+    return (($lines | Select-Object -First 1) -split "\s+")[0]
 }
 
-function Assert-TagPointsAtHead {
+function Assert-LocalTagPointsAtHead {
     param([string]$TagName)
 
-    $headCommit = (Get-GitOutput -Arguments @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
-    $tagCommit = (Get-GitOutput -Arguments @("rev-list", "-n", "1", $TagName) | Select-Object -First 1).Trim()
+    $headCommit = (Get-GitOutput -CommandArguments @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
+    $tagCommit = (Get-GitOutput -CommandArguments @("rev-list", "-n", "1", $TagName) | Select-Object -First 1).Trim()
 
     if (-not [string]::Equals($headCommit, $tagCommit, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Tag '$TagName' exists but does not point at HEAD."
+        throw "Tag '$TagName' exists locally but does not point at HEAD."
+    }
+}
+
+function Ensure-ReleaseTag {
+    param([string]$TagName)
+
+    $headCommit = (Get-GitOutput -CommandArguments @("rev-parse", "HEAD") | Select-Object -First 1).Trim()
+    $remoteTagCommit = Get-RemoteTagCommit -TagName $TagName
+
+    if (-not [string]::IsNullOrWhiteSpace($remoteTagCommit)) {
+        if (-not [string]::Equals($remoteTagCommit, $headCommit, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Origin tag '$TagName' already exists but does not point at HEAD."
+        }
+
+        if (-not (Test-GitTagExists -TagName $TagName)) {
+            Invoke-External `
+                -FilePath (Require-Command "git") `
+                -CommandArguments ([string[]]@("fetch", "origin", "refs/tags/${TagName}:refs/tags/${TagName}")) `
+                -Description "Fetching existing release tag"
+        }
+
+        Assert-LocalTagPointsAtHead -TagName $TagName
+        Write-Host "Origin tag $TagName already exists and points at HEAD. Continuing with the same release version."
+        return
+    }
+
+    if (Test-GitTagExists -TagName $TagName) {
+        Assert-LocalTagPointsAtHead -TagName $TagName
+        Write-Host "Local tag $TagName already exists and points at HEAD."
+    }
+    else {
+        if (-not (Read-YesNo -Question "Create local release tag $TagName at HEAD?" -DefaultYes $true)) {
+            throw "Release tag is required."
+        }
+
+        Invoke-External `
+            -FilePath (Require-Command "git") `
+            -CommandArguments ([string[]]@("tag", $TagName)) `
+            -Description "Creating local release tag"
+    }
+
+    if (Read-YesNo -Question "Push tag $TagName to origin now?" -DefaultYes $true) {
+        Invoke-External `
+            -FilePath (Require-Command "git") `
+            -CommandArguments ([string[]]@("push", "origin", $TagName)) `
+            -Description "Pushing release tag"
+    }
+    else {
+        Write-Warning "The GitHub release upload expects the tag to exist on origin."
     }
 }
 
@@ -297,10 +560,8 @@ function Show-CodeSigningCertificates {
 }
 
 function Resolve-SigningThumbprint {
-    param([string]$ExplicitThumbprint)
-
-    if (-not [string]::IsNullOrWhiteSpace($ExplicitThumbprint)) {
-        return ($ExplicitThumbprint -replace "\s", "")
+    if (-not [string]::IsNullOrWhiteSpace($SignThumbprint)) {
+        return ($SignThumbprint -replace "\s", "")
     }
 
     Show-CodeSigningCertificates
@@ -308,127 +569,62 @@ function Resolve-SigningThumbprint {
     return ($thumbprint -replace "\s", "")
 }
 
-function Resolve-GitHubToken {
-    param([string]$ExplicitToken)
-
-    if (-not [string]::IsNullOrWhiteSpace($ExplicitToken)) {
-        return $ExplicitToken
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
-        return $env:GH_TOKEN
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
-        return $env:GITHUB_TOKEN
-    }
-
-    return $null
-}
-
-function Read-SecretValue {
-    param([Parameter(Mandatory = $true)][string]$Prompt)
-
-    while ($true) {
-        $secure = Read-Host -Prompt $Prompt -AsSecureString
-        if ($secure.Length -gt 0) {
-            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-            try {
-                return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-            }
-            finally {
-                [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-            }
-        }
-
-        Write-Host "A value is required."
-    }
-}
-
 function Ensure-GitHubToken {
-    $token = Resolve-GitHubToken -ExplicitToken $GitHubToken
+    $token = Resolve-ExistingGitHubToken
     if (-not [string]::IsNullOrWhiteSpace($token)) {
-        if (-not [string]::IsNullOrWhiteSpace($GitHubToken)) {
-            $env:GH_TOKEN = $GitHubToken
-        }
-
-        return $token
+        $env:GH_TOKEN = $token
+        return
     }
 
-    if (-not (Read-YesNo -Question "No GitHub token is set. Paste one for this upload now?" -DefaultYes $true)) {
-        throw "GitHub upload requires GH_TOKEN, GITHUB_TOKEN, or -GitHubToken."
+    if (-not (Read-YesNo -Question "No GitHub token is available. Paste one for this upload now?" -DefaultYes $true)) {
+        throw "GitHub upload requires GitHub CLI auth, GH_TOKEN, GITHUB_TOKEN, or -GitHubToken."
     }
 
-    $token = Read-SecretValue -Prompt "GitHub token"
-    $env:GH_TOKEN = $token
-    return $token
+    $env:GH_TOKEN = Read-SecretValue -Prompt "GitHub token"
 }
 
-function Get-ReleaseVersion {
-    param($BaseVersion)
-
-    $updateType = Select-UpdateType -BaseVersion $BaseVersion
-    $proposedVersion = New-BumpedVersion -BaseVersion $BaseVersion -UpdateType $updateType
-
-    if (Read-YesNo -Question "Use release version ${proposedVersion}?" -DefaultYes $true) {
-        return $proposedVersion
-    }
-
-    while ($true) {
-        $customVersion = Read-RequiredValue -Prompt "Enter release version"
-        if (Test-SemVer -Value $customVersion) {
-            return $customVersion
-        }
-
-        Write-Host "Please enter a valid semantic version, for example 1.2.0."
-    }
-}
-
-function Get-ReleaseScriptArgs {
+function New-ReleaseScriptArguments {
     param(
         [string]$Version,
+        [switch]$ForUpload,
         [string]$Thumbprint,
-        [string]$TagName,
         [bool]$AllowDirty,
-        [bool]$SkipGitChecks,
-        [switch]$NoUpload,
-        [switch]$SkipBuild,
-        [string]$Token
+        [bool]$DownloadPrevious,
+        [bool]$ClearOutput,
+        [bool]$FailOnPreviousDownloadError
     )
 
     $scriptArgs = @(
         "-Version", $Version,
         "-Channel", $Channel,
         "-RepositoryUrl", $RepositoryUrl,
-        "-OutputDir", $OutputDir,
-        "-TagName", $TagName
+        "-OutputDir", $OutputDir
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($Thumbprint)) {
-        $scriptArgs += @("-SignThumbprint", $Thumbprint)
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($Token)) {
-        $scriptArgs += @("-GitHubToken", $Token)
-    }
-
-    if ($NoUpload) {
-        $scriptArgs += "-NoUpload"
-    }
-
-    if ($SkipBuild) {
+    if ($ForUpload) {
         $scriptArgs += "-SkipBuild"
+    }
+    else {
+        $scriptArgs += @("-SignThumbprint", $Thumbprint, "-NoUpload")
+
+        if (-not $DownloadPrevious) {
+            $scriptArgs += "-SkipPreviousDownload"
+        }
+
+        if (-not $ClearOutput) {
+            $scriptArgs += "-KeepOutput"
+        }
+
+        if ($FailOnPreviousDownloadError) {
+            $scriptArgs += "-FailOnPreviousDownloadError"
+        }
     }
 
     if ($AllowDirty) {
         $scriptArgs += "-AllowDirty"
     }
 
-    if ($SkipGitChecks) {
-        $scriptArgs += "-SkipGitChecks"
-    }
-
-    return $scriptArgs
+    return [string[]]$scriptArgs
 }
 
 Push-Location $script:RepoRoot
@@ -440,37 +636,44 @@ try {
     Require-Command "git" | Out-Null
     Require-Command "dotnet" | Out-Null
     Require-Command "vpk" | Out-Null
+    Get-GitOutput -CommandArguments @("rev-parse", "--is-inside-work-tree") | Out-Null
 
-    Get-GitOutput -Arguments @("rev-parse", "--is-inside-work-tree") | Out-Null
-
-    if (-not $SkipFetchTags) {
-        if (Read-YesNo -Question "Fetch tags from origin before choosing the next version?" -DefaultYes $true) {
-            Invoke-CommandLine `
-                -FilePath (Require-Command "git") `
-                -Arguments @("fetch", "--tags", "origin") `
-                -Description "Fetching release tags"
-        }
+    if (Read-YesNo -Question "Fetch tags from origin before choosing the next version?" -DefaultYes $true) {
+        Invoke-External `
+            -FilePath (Require-Command "git") `
+            -CommandArguments ([string[]]@("fetch", "--tags", "origin")) `
+            -Description "Fetching release tags"
     }
 
-    $baseVersion = Get-LatestReleaseVersionFromGitTags
-    if ($null -eq $baseVersion) {
-        Write-Host ""
-        Write-Warning "No local release tags like v1.2.3 were found."
-        if (Read-YesNo -Question "Use 0.0.0 as the base version?" -DefaultYes $true) {
-            $baseVersion = ConvertTo-SemVerParts -Value "0.0.0"
-        }
-        else {
-            $baseText = Read-RequiredValue -Prompt "Enter the current released version"
-            $baseVersion = ConvertTo-SemVerParts -Value $baseText
-        }
+    $repository = Get-GitHubRepositoryInfo -RepoUrl $RepositoryUrl
+    Write-Host ""
+    Write-Host "Checking published GitHub Releases..."
+    $originReleaseVersions = @(Get-CheckedGitHubReleaseVersions -Repository $repository)
+    $latestOriginRelease = Get-HighestSemVer -Versions $originReleaseVersions
+
+    if ($null -eq $latestOriginRelease) {
+        Write-Warning "No published non-prerelease GitHub release with a SemVer tag was found."
+        $baseVersion = Get-ManualBaseVersion
+    }
+    else {
+        $baseVersion = $latestOriginRelease
+        Write-Host "Latest published GitHub release: $($latestOriginRelease.Text) ($($latestOriginRelease.TagName))"
     }
 
     Write-Host ""
-    Write-Host "Latest known release version: $($baseVersion.Text)"
+    Write-Host "Base version for this release: $($baseVersion.Text)"
+    $version = Select-ReleaseVersion -BaseVersion $baseVersion
+    $versionParts = ConvertTo-SemVerParts -Value $version
 
-    $version = Get-ReleaseVersion -BaseVersion $baseVersion
+    if ($null -ne $latestOriginRelease -and (Compare-SemVer -Left $versionParts -Right $latestOriginRelease) -le 0) {
+        throw "Selected version $version is not higher than the latest published GitHub release $($latestOriginRelease.Text)."
+    }
+
+    if (Test-GitHubReleaseVersionExists -Versions $originReleaseVersions -Version $version) {
+        throw "GitHub Release $version already exists. Choose a higher version."
+    }
+
     $tagName = "v$version"
-    $releaseName = "Selbstlaeufer CloudDrive $version"
     $resolvedOutputDir = Resolve-WorkspacePath -Path $OutputDir
     $setupPath = Join-Path $resolvedOutputDir "$script:PackId-$Channel-Setup.exe"
 
@@ -487,7 +690,7 @@ try {
     }
 
     $allowDirty = $false
-    $status = @(Get-GitOutput -Arguments @("status", "--short"))
+    $status = @(Get-GitOutput -CommandArguments @("status", "--short"))
     if ($status.Count -gt 0) {
         Write-Host ""
         Write-Warning "The working tree has uncommitted changes:"
@@ -501,9 +704,9 @@ try {
     if (-not $SkipTests) {
         if (Read-YesNo -Question "Run the Release test suite now?" -DefaultYes $true) {
             try {
-                Invoke-CommandLine `
+                Invoke-External `
                     -FilePath (Require-Command "dotnet") `
-                    -Arguments @("test", "CloudDrive.sln", "-c", "Release") `
+                    -CommandArguments ([string[]]@("test", "CloudDrive.sln", "-c", "Release")) `
                     -Description "Running Release tests"
             }
             catch {
@@ -518,42 +721,12 @@ try {
         }
     }
 
-    if (Test-GitTagExists -TagName $tagName) {
-        Assert-TagPointsAtHead -TagName $tagName
-        Write-Host "Local tag $tagName already exists and points at HEAD."
-    }
-    else {
-        if (-not (Read-YesNo -Question "Create local release tag $tagName at HEAD?" -DefaultYes $true)) {
-            throw "Release tag is required."
-        }
+    Ensure-ReleaseTag -TagName $tagName
 
-        Invoke-CommandLine `
-            -FilePath (Require-Command "git") `
-            -Arguments @("tag", $tagName) `
-            -Description "Creating local release tag"
-    }
-
-    if (Test-GitRemoteTagExists -TagName $tagName) {
-        Write-Host "Remote tag $tagName already exists on origin."
-    }
-    else {
-        if (Read-YesNo -Question "Push tag $tagName to origin now?" -DefaultYes $true) {
-            Invoke-CommandLine `
-                -FilePath (Require-Command "git") `
-                -Arguments @("push", "origin", $tagName) `
-                -Description "Pushing release tag"
-        }
-        else {
-            Write-Warning "The upload can continue, but the GitHub release tag should be pushed before calling the release complete."
-        }
-    }
-
-    $thumbprint = Resolve-SigningThumbprint -ExplicitThumbprint $SignThumbprint
-
+    $thumbprint = Resolve-SigningThumbprint
     $downloadPrevious = Read-YesNo -Question "Download previous release assets before building?" -DefaultYes $true
     $clearOutput = Read-YesNo -Question "Clear the staging output before building?" -DefaultYes $true
     $failOnPreviousDownloadError = $false
-    $skipGitChecks = $false
 
     if (-not $downloadPrevious) {
         Write-Warning "Delta package optimization may be worse without previous release assets."
@@ -562,38 +735,22 @@ try {
         $failOnPreviousDownloadError = Read-YesNo -Question "Fail if previous release assets cannot be downloaded?" -DefaultYes $false
     }
 
-    if (Read-YesNo -Question "Review advanced release script options?" -DefaultYes $false) {
-        $skipGitChecks = Read-YesNo -Question "Pass -SkipGitChecks?" -DefaultYes $false
-    }
-
     if (-not (Read-YesNo -Question "Build and sign the staged release now?" -DefaultYes $true)) {
         throw "Release cancelled before build."
     }
 
-    $stageArgs = Get-ReleaseScriptArgs `
+    $publishScript = Join-Path $script:RepoRoot "build\publish-release.ps1"
+    $stageArgs = New-ReleaseScriptArguments `
         -Version $version `
         -Thumbprint $thumbprint `
-        -TagName $tagName `
         -AllowDirty $allowDirty `
-        -SkipGitChecks $skipGitChecks `
-        -NoUpload
+        -DownloadPrevious $downloadPrevious `
+        -ClearOutput $clearOutput `
+        -FailOnPreviousDownloadError $failOnPreviousDownloadError
 
-    if (-not $downloadPrevious) {
-        $stageArgs += "-SkipPreviousDownload"
-    }
-
-    if ($failOnPreviousDownloadError) {
-        $stageArgs += "-FailOnPreviousDownloadError"
-    }
-
-    if (-not $clearOutput) {
-        $stageArgs += "-KeepOutput"
-    }
-
-    $publishScript = Join-Path $script:RepoRoot "build\publish-release.ps1"
-    Invoke-CommandLine `
+    Invoke-External `
         -FilePath $publishScript `
-        -Arguments $stageArgs `
+        -CommandArguments ([string[]]$stageArgs) `
         -Description "Building signed release assets"
 
     Write-Host ""
@@ -626,20 +783,18 @@ try {
         return
     }
 
-    Ensure-GitHubToken | Out-Null
-    $uploadArgs = Get-ReleaseScriptArgs `
+    Ensure-GitHubToken
+    $uploadArgs = New-ReleaseScriptArguments `
         -Version $version `
-        -Thumbprint "" `
-        -TagName $tagName `
+        -ForUpload `
         -AllowDirty $allowDirty `
-        -SkipGitChecks $skipGitChecks `
-        -SkipBuild
+        -DownloadPrevious $true `
+        -ClearOutput $true `
+        -FailOnPreviousDownloadError $false
 
-    $uploadArgs += @("-ReleaseName", $releaseName)
-
-    Invoke-CommandLine `
+    Invoke-External `
         -FilePath $publishScript `
-        -Arguments $uploadArgs `
+        -CommandArguments ([string[]]$uploadArgs) `
         -Description "Uploading tested assets to GitHub Releases"
 
     Write-Host ""

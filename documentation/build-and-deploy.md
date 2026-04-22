@@ -31,7 +31,7 @@ On the release PC:
 - Velopack CLI pinned to the project version
 - Git
 - access to push tags to the public repository
-- a GitHub token that can write release contents
+- GitHub CLI authenticated for release uploads, or a GitHub token that can write release contents
 - the hardware code-signing token connected and unlocked
 - the signing certificate visible in `Cert:\CurrentUser\My` or `Cert:\LocalMachine\My`
 
@@ -73,7 +73,15 @@ $thumbprint = "<SHA1 certificate thumbprint>"
 
 ## Prepare The GitHub Token
 
-Set a token only in the current shell:
+The release scripts can reuse an authenticated GitHub CLI session. This is the easiest local setup:
+
+```powershell
+gh auth login
+```
+
+After that, the scripts read `gh auth token` automatically.
+
+Alternatively, set a token only in the current shell:
 
 ```powershell
 $env:GH_TOKEN = "<github token>"
@@ -293,7 +301,7 @@ Installed apps on the `stable` channel check GitHub Releases, download the updat
 | `-SkipBuild` | Upload already staged assets without rebuilding |
 | `-Channel` | Override the Velopack channel, default `stable` |
 | `-OutputDir` | Override the staging directory |
-| `-GitHubToken` | Pass a token explicitly instead of using `GH_TOKEN` or `GITHUB_TOKEN` |
+| `-GitHubToken` | Pass a token explicitly instead of using GitHub CLI auth, `GH_TOKEN`, or `GITHUB_TOKEN` |
 | `-SkipPreviousDownload` | Build without downloading previous release assets |
 | `-FailOnPreviousDownloadError` | Fail if previous release assets cannot be downloaded |
 | `-KeepOutput` | Do not clear the staging directory before building |
@@ -360,7 +368,13 @@ The script signs multiple DLL and EXE files. Hardware-token middleware may ask f
 
 ### Upload Says A Token Is Required
 
-Set:
+Authenticate GitHub CLI:
+
+```powershell
+gh auth login
+```
+
+Or set:
 
 ```powershell
 $env:GH_TOKEN = "<github token>"

@@ -115,7 +115,26 @@ function Resolve-GitHubToken {
         return $env:GITHUB_TOKEN
     }
 
-    return $null
+    return Get-GitHubCliToken
+}
+
+function Get-GitHubCliToken {
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -eq $ghCommand) {
+        return $null
+    }
+
+    $tokenOutput = @(& $ghCommand.Source auth token --hostname github.com 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $tokenOutput.Count -eq 0) {
+        return $null
+    }
+
+    $token = ($tokenOutput | Select-Object -First 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        return $null
+    }
+
+    return $token
 }
 
 function Assert-GitReleaseState {
@@ -278,7 +297,7 @@ function Invoke-GitHubReleaseUpload {
     )
 
     if ([string]::IsNullOrWhiteSpace($Token)) {
-        throw "GitHub upload requires a token. Set GH_TOKEN or GITHUB_TOKEN, or pass -GitHubToken."
+        throw "GitHub upload requires a token. Authenticate with GitHub CLI using 'gh auth login', set GH_TOKEN or GITHUB_TOKEN, or pass -GitHubToken."
     }
 
     $vpkCommand = Get-Command vpk -ErrorAction SilentlyContinue
