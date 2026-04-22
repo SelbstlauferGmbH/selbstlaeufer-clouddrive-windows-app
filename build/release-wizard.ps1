@@ -370,7 +370,7 @@ function Get-ReleaseVersion {
     $updateType = Select-UpdateType -BaseVersion $BaseVersion
     $proposedVersion = New-BumpedVersion -BaseVersion $BaseVersion -UpdateType $updateType
 
-    if (Read-YesNo -Question "Use release version $proposedVersion?" -DefaultYes $true) {
+    if (Read-YesNo -Question "Use release version ${proposedVersion}?" -DefaultYes $true) {
         return $proposedVersion
     }
 
