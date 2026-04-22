@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CloudDrive.App",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/CloudDrive.App/bin/x64/Debug/net9.0-windows10.0.22621.0/CloudDrive.App.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/CloudDrive.App",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        }
+    ]
+}

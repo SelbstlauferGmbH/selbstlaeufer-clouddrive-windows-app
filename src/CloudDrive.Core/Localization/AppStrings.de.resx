@@ -1,0 +1,1289 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="App_Name" xml:space="preserve">
+    <value>Selbstläufer CloudDrive</value>
+  </data>
+  <data name="App_ControlPanel" xml:space="preserve">
+    <value>Selbstläufer CloudDrive Kontrollzentrum</value>
+  </data>
+  <data name="App_ControlPanel_Sidebar" xml:space="preserve">
+    <value>Selbstläufer CloudDrive&#x0A;Kontrollzentrum</value>
+  </data>
+  <data name="App_ControlPanel_Section" xml:space="preserve">
+    <value>Selbstläufer CloudDrive Kontrollzentrum - {0}</value>
+  </data>
+  <data name="App_Version_Default" xml:space="preserve">
+    <value>Selbstläufer CloudDrive v1.0.0</value>
+  </data>
+  <data name="App_Version_Format" xml:space="preserve">
+    <value>Selbstläufer CloudDrive v{0}.{1}.{2} (Build {3})</value>
+  </data>
+  <data name="App_AlreadyRunning_Message" xml:space="preserve">
+    <value>Selbstläufer CloudDrive läuft bereits.</value>
+  </data>
+  <data name="App_Error_Title" xml:space="preserve">
+    <value>Selbstläufer CloudDrive - Fehler</value>
+  </data>
+  <data name="App_Error_Message" xml:space="preserve">
+    <value>CloudDrive hat einen Fehler festgestellt und muss beendet werden.
+
+{0}
+
+Ein Absturzprotokoll wurde geschrieben nach:
+{1}</value>
+  </data>
+  <data name="App_Error_RestartPrompt" xml:space="preserve">
+    <value>CloudDrive hat einen Fehler festgestellt und muss beendet werden.
+
+{0}
+
+Ein Absturzprotokoll wurde geschrieben nach:
+{1}
+
+Moechten Sie CloudDrive jetzt neu starten?</value>
+  </data>
+  <data name="App_NonFatalUiError_Message" xml:space="preserve">
+    <value>CloudDrive hat sich von einem Fehler im Kontrollzentrum erholt. Die Synchronisierung laeuft weiter.</value>
+  </data>
+  <data name="App_IntegrityError_Title" xml:space="preserve">
+    <value>Selbstläufer CloudDrive - Installationsintegritätsfehler</value>
+  </data>
+  <data name="Common_Save" xml:space="preserve">
+    <value>Speichern</value>
+  </data>
+  <data name="Common_Close" xml:space="preserve">
+    <value>Schließen</value>
+  </data>
+  <data name="Common_Open" xml:space="preserve">
+    <value>Öffnen</value>
+  </data>
+  <data name="Common_Help" xml:space="preserve">
+    <value>Hilfe</value>
+  </data>
+  <data name="Common_Privacy" xml:space="preserve">
+    <value>Datenschutz</value>
+  </data>
+  <data name="Common_Terms" xml:space="preserve">
+    <value>Nutzungsbedingungen</value>
+  </data>
+  <data name="Common_Location" xml:space="preserve">
+    <value>Ort:</value>
+  </data>
+  <data name="Common_Previous" xml:space="preserve">
+    <value>Zurück</value>
+  </data>
+  <data name="Common_Next" xml:space="preserve">
+    <value>Weiter</value>
+  </data>
+  <data name="Common_Theme" xml:space="preserve">
+    <value>Design</value>
+  </data>
+  <data name="Common_Language" xml:space="preserve">
+    <value>Sprache</value>
+  </data>
+  <data name="Common_System" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="Common_English" xml:space="preserve">
+    <value>Englisch</value>
+  </data>
+  <data name="Common_German" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="Common_Light" xml:space="preserve">
+    <value>Hell</value>
+  </data>
+  <data name="Common_Dark" xml:space="preserve">
+    <value>Dunkel</value>
+  </data>
+  <data name="Common_Never" xml:space="preserve">
+    <value>Nie</value>
+  </data>
+  <data name="Common_NotAvailable" xml:space="preserve">
+    <value>Nicht verfügbar</value>
+  </data>
+  <data name="Common_NotChecked" xml:space="preserve">
+    <value>Nicht geprüft</value>
+  </data>
+  <data name="Common_NotConfigured" xml:space="preserve">
+    <value>Nicht konfiguriert</value>
+  </data>
+  <data name="Common_Healthy" xml:space="preserve">
+    <value>In Ordnung</value>
+  </data>
+  <data name="Common_Warning" xml:space="preserve">
+    <value>Warnung</value>
+  </data>
+  <data name="Common_Error" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="Common_Unknown" xml:space="preserve">
+    <value>Unbekannt</value>
+  </data>
+  <data name="Common_Connected" xml:space="preserve">
+    <value>Verbunden</value>
+  </data>
+  <data name="Common_Missing" xml:space="preserve">
+    <value>Fehlt</value>
+  </data>
+  <data name="Common_Available" xml:space="preserve">
+    <value>Verfügbar</value>
+  </data>
+  <data name="Common_Running" xml:space="preserve">
+    <value>Läuft</value>
+  </data>
+  <data name="Common_Resume" xml:space="preserve">
+    <value>Fortsetzen</value>
+  </data>
+  <data name="Common_Pause" xml:space="preserve">
+    <value>Pausieren</value>
+  </data>
+  <data name="Common_Recheck" xml:space="preserve">
+    <value>Erneut prüfen</value>
+  </data>
+  <data name="Common_CheckNow" xml:space="preserve">
+    <value>Jetzt pruefen</value>
+  </data>
+  <data name="Common_Dismiss" xml:space="preserve">
+    <value>Ausblenden</value>
+  </data>
+  <data name="Common_OpenFolder" xml:space="preserve">
+    <value>Ordner öffnen</value>
+  </data>
+  <data name="Common_OpenFile" xml:space="preserve">
+    <value>Datei öffnen</value>
+  </data>
+  <data name="Common_SyncNow" xml:space="preserve">
+    <value>Jetzt synchronisieren</value>
+  </data>
+  <data name="Common_Today" xml:space="preserve">
+    <value>Heute</value>
+  </data>
+  <data name="Common_Yesterday" xml:space="preserve">
+    <value>Gestern</value>
+  </data>
+  <data name="Language_System" xml:space="preserve">
+    <value>Systemstandard</value>
+  </data>
+  <data name="Wizard_WindowTitle" xml:space="preserve">
+    <value>Selbstläufer CloudDrive einrichten</value>
+  </data>
+  <data name="Wizard_Title" xml:space="preserve">
+    <value>Einrichtung abschliessen</value>
+  </data>
+  <data name="Wizard_Subtitle" xml:space="preserve">
+    <value>CloudDrive benoetigt eine vollstaendige Kontokonfiguration, bevor die Synchronisierung starten kann.</value>
+  </data>
+  <data name="Wizard_Appearance_Hint" xml:space="preserve">
+    <value>Waehlen Sie zuerst Sprache und Darstellungsmodus. CloudDrive kann dem System folgen oder hellen bzw. dunklen Modus erzwingen.</value>
+  </data>
+  <data name="Wizard_LaunchOnStartup_Hint" xml:space="preserve">
+    <value>CloudDrive startet beim Anmelden still im Hintergrund. Sie koennen dies spaeter im Control Panel oder im Windows-Task-Manager aendern.</value>
+  </data>
+  <data name="Wizard_PasswordHint_Stored" xml:space="preserve">
+    <value>Ein Passwort ist bereits gespeichert. Lassen Sie dieses Feld leer, um es zu behalten, oder geben Sie ein neues Passwort ein.</value>
+  </data>
+  <data name="Wizard_PasswordHint_Missing" xml:space="preserve">
+    <value>Geben Sie das Kontopasswort ein, um die Einrichtung abzuschliessen.</value>
+  </data>
+  <data name="Wizard_SaveAndStart" xml:space="preserve">
+    <value>Speichern und starten</value>
+  </data>
+  <data name="Wizard_Status_EnterValidWebDavUrl" xml:space="preserve">
+    <value>Geben Sie eine gueltige WebDAV-URL ein.</value>
+  </data>
+  <data name="Wizard_Status_EnterUsername" xml:space="preserve">
+    <value>Geben Sie den Benutzernamen des Kontos ein.</value>
+  </data>
+  <data name="Wizard_Status_EnterPassword" xml:space="preserve">
+    <value>Geben Sie das Kontopasswort ein.</value>
+  </data>
+  <data name="Wizard_Status_Starting" xml:space="preserve">
+    <value>Einstellungen gespeichert. Selbstläufer CloudDrive wird gestartet.</value>
+  </data>
+  <data name="Navigation_Group_Main" xml:space="preserve">
+    <value>Hauptbereiche</value>
+  </data>
+  <data name="Navigation_Group_Config" xml:space="preserve">
+    <value>Konfiguration</value>
+  </data>
+  <data name="Navigation_Activity_Title" xml:space="preserve">
+    <value>Aktivität</value>
+  </data>
+  <data name="Navigation_Activity_Description" xml:space="preserve">
+    <value>Vollständiger Aktivitätsverlauf mit Suche und Filtern</value>
+  </data>
+  <data name="Navigation_Problems_Title" xml:space="preserve">
+    <value>Probleme</value>
+  </data>
+  <data name="Navigation_Problems_Description" xml:space="preserve">
+    <value>Konflikte, Synchronisierungsfehler und sichere Wiederherstellung</value>
+  </data>
+  <data name="Navigation_Statistics_Title" xml:space="preserve">
+    <value>Speicher &amp; Statistik</value>
+  </data>
+  <data name="Navigation_Statistics_Description" xml:space="preserve">
+    <value>Betriebskennzahlen, Indextrends und lokale Speicherdetails</value>
+  </data>
+  <data name="Navigation_HealthCheck_Title" xml:space="preserve">
+    <value>Integritätsprüfung</value>
+  </data>
+  <data name="Navigation_HealthCheck_Description" xml:space="preserve">
+    <value>Konnektivität, Synchronisierungsordner und Diagnose</value>
+  </data>
+  <data name="Navigation_Account_Title" xml:space="preserve">
+    <value>Konto</value>
+  </data>
+  <data name="Navigation_Account_Description" xml:space="preserve">
+    <value>WebDAV-Endpunkt, Zugangsdaten und Identität</value>
+  </data>
+  <data name="Navigation_Account_Hint" xml:space="preserve">
+    <value>Primär</value>
+  </data>
+  <data name="Navigation_General_Title" xml:space="preserve">
+    <value>Allgemein</value>
+  </data>
+  <data name="Navigation_General_Description" xml:space="preserve">
+    <value>Startverhalten, Darstellung und Benachrichtigungen</value>
+  </data>
+  <data name="Navigation_Network_Title" xml:space="preserve">
+    <value>Netzwerk</value>
+  </data>
+  <data name="Navigation_Network_Description" xml:space="preserve">
+    <value>Verbindungstests und Synchronisierungstakt</value>
+  </data>
+  <data name="Navigation_Advanced_Title" xml:space="preserve">
+    <value>Erweitert</value>
+  </data>
+  <data name="Navigation_Advanced_Description" xml:space="preserve">
+    <value>Protokollierung, Diagnose und Zurücksetzen</value>
+  </data>
+  <data name="Section_Activity_Subtitle" xml:space="preserve">
+    <value>Letzte Dateiaktivitäten durchsuchen, Ereignisse suchen und den Verlauf exportieren.</value>
+  </data>
+  <data name="Section_Activity_ExportCsv" xml:space="preserve">
+    <value>CSV exportieren</value>
+  </data>
+  <data name="Section_Activity_ActionFilters" xml:space="preserve">
+    <value>Aktionsfilter</value>
+  </data>
+  <data name="Section_Activity_FileTypeFilters" xml:space="preserve">
+    <value>Dateitypfilter</value>
+  </data>
+  <data name="Section_Problems_Subtitle" xml:space="preserve">
+    <value>Konflikte, Synchronisierungsfehler und Wiederherstellungsaktionen prüfen.</value>
+  </data>
+  <data name="Section_Problems_CenterTitle" xml:space="preserve">
+    <value>Problemzentrale</value>
+  </data>
+  <data name="Section_Problems_EmptyTitle" xml:space="preserve">
+    <value>Keine offenen Probleme</value>
+  </data>
+  <data name="Section_Problems_EmptyDescription" xml:space="preserve">
+    <value>CloudDrive hat keine offenen Probleme gefunden.</value>
+  </data>
+  <data name="Section_Statistics_Subtitle" xml:space="preserve">
+    <value>Elementanzahl, Speicherverbrauch und jüngste Aktivitätstrends verfolgen.</value>
+  </data>
+  <data name="Section_Statistics_StatusDistribution" xml:space="preserve">
+    <value>Statusverteilung</value>
+  </data>
+  <data name="Section_Statistics_ActivityDistribution" xml:space="preserve">
+    <value>Aktivitätsverteilung</value>
+  </data>
+  <data name="Section_Statistics_FootprintTitle" xml:space="preserve">
+    <value>Lokaler Speicherbedarf</value>
+  </data>
+  <data name="Section_Statistics_FootprintDescription" xml:space="preserve">
+    <value>Momentaufnahme von lokalem Synchronisierungsindex, Protokollen und Speicherbedarf.</value>
+  </data>
+  <data name="Section_Statistics_TrackedStorageTitle" xml:space="preserve">
+    <value>Verfolgter Speicher</value>
+  </data>
+  <data name="Section_Statistics_PathsTitle" xml:space="preserve">
+    <value>Pfade</value>
+  </data>
+  <data name="Section_Statistics_SyncRoot" xml:space="preserve">
+    <value>Synchronisierungsordner</value>
+  </data>
+  <data name="Section_Statistics_DataDirectory" xml:space="preserve">
+    <value>Datenverzeichnis</value>
+  </data>
+  <data name="Section_Statistics_LogFiles" xml:space="preserve">
+    <value>Protokolldateien</value>
+  </data>
+  <data name="Section_Statistics_CurrentIndexTitle" xml:space="preserve">
+    <value>Aktueller Index</value>
+  </data>
+  <data name="Section_Health_Subtitle" xml:space="preserve">
+    <value>Konnektivität, Synchronisierungsordner und Diagnose prüfen.</value>
+  </data>
+  <data name="Section_Health_RunAllChecks" xml:space="preserve">
+    <value>Alle Prüfungen ausführen</value>
+  </data>
+  <data name="Section_Health_LiveSnapshotTitle" xml:space="preserve">
+    <value>Live-Status</value>
+  </data>
+  <data name="Section_Health_WatchdogSnapshotTitle" xml:space="preserve">
+    <value>Watchdog-Status</value>
+  </data>
+  <data name="Section_Health_WatchdogMessagesTitle" xml:space="preserve">
+    <value>Letzte Watchdog-Meldungen</value>
+  </data>
+  <data name="Section_Health_WatchdogMessagesSubtitle" xml:space="preserve">
+    <value>Die wichtigsten zuletzt gespeicherten Watchdog-Ereignisse fÃ¼r das Kontrollzentrum.</value>
+  </data>
+  <data name="Section_Health_WatchdogMessagesEmpty" xml:space="preserve">
+    <value>Noch keine wichtigen Watchdog-Meldungen vorhanden.</value>
+  </data>
+  <data name="Section_General_Subtitle" xml:space="preserve">
+    <value>Start, Darstellung und Benachrichtigungen konfigurieren.</value>
+  </data>
+  <data name="Section_General_LaunchOnStartup" xml:space="preserve">
+    <value>CloudDrive beim Windows-Start ausführen</value>
+  </data>
+  <data name="Section_General_ShowNotifications" xml:space="preserve">
+    <value>Benachrichtigungen anzeigen</value>
+  </data>
+  <data name="Section_Account_Subtitle" xml:space="preserve">
+    <value>Verbinden Sie CloudDrive mit Ihrem WebDAV-Server und verwalten Sie die Zugangsdaten.</value>
+  </data>
+  <data name="Section_Account_WebDavUrl" xml:space="preserve">
+    <value>WebDAV-URL</value>
+  </data>
+  <data name="Section_Account_Username" xml:space="preserve">
+    <value>Benutzername</value>
+  </data>
+  <data name="Section_Account_Password" xml:space="preserve">
+    <value>Passwort</value>
+  </data>
+  <data name="Section_Account_Authentication" xml:space="preserve">
+    <value>Authentifizierung</value>
+  </data>
+  <data name="Section_Account_TestConnection" xml:space="preserve">
+    <value>Verbindung testen</value>
+  </data>
+  <data name="Section_Network_Subtitle" xml:space="preserve">
+    <value>Synchronisierungstakt und Netzwerkverhalten anpassen.</value>
+  </data>
+  <data name="Section_Network_PollingInterval" xml:space="preserve">
+    <value>Abfrageintervall (Sekunden)</value>
+  </data>
+  <data name="Section_Network_MaxConcurrentTransfers" xml:space="preserve">
+    <value>Maximale gleichzeitige Übertragungen</value>
+  </data>
+  <data name="Section_Advanced_Subtitle" xml:space="preserve">
+    <value>Erweiterte Diagnose-, Protokollierungs- und Reset-Werkzeuge.</value>
+  </data>
+  <data name="Section_Advanced_EnableFileLogging" xml:space="preserve">
+    <value>Dateiprotokollierung aktivieren</value>
+  </data>
+  <data name="Section_Advanced_FileLoggingDescription" xml:space="preserve">
+    <value>Ausführliche Diagnoseprotokolle im lokalen AppData-Ordner schreiben.</value>
+  </data>
+  <data name="Section_Advanced_ForceCrash" xml:space="preserve">
+    <value>Absturz erzwingen</value>
+  </data>
+  <data name="Section_Advanced_DangerZone" xml:space="preserve">
+    <value>Gefahrenbereich</value>
+  </data>
+  <data name="Section_Advanced_ResetDescription" xml:space="preserve">
+    <value>Wählen Sie, ob nur lokale Synchronisierungsdaten gelöscht oder auch die gespeicherte Konfiguration entfernt werden soll.</value>
+  </data>
+  <data name="Section_Advanced_ResetLocalDescription" xml:space="preserve">
+    <value>Entfernt den Synchronisierungsordner und lokale Metadaten, behält aber Ihre gespeicherten Kontoeinstellungen.</value>
+  </data>
+  <data name="Section_Advanced_ResetButton" xml:space="preserve">
+    <value>Lokale Daten zurücksetzen</value>
+  </data>
+  <data name="Section_Advanced_FullResetDescription" xml:space="preserve">
+    <value>Löscht außerdem das gespeicherte WebDAV-Konto, das gespeicherte Passwort, App-Einstellungen und lokale Protokolldateien.</value>
+  </data>
+  <data name="Section_Advanced_FullResetButton" xml:space="preserve">
+    <value>Konfiguration und Protokolle zurücksetzen</value>
+  </data>
+  <data name="Filter_Action_All" xml:space="preserve">
+    <value>Alle</value>
+  </data>
+  <data name="Filter_Action_Uploaded" xml:space="preserve">
+    <value>Hochgeladen</value>
+  </data>
+  <data name="Filter_Action_Downloaded" xml:space="preserve">
+    <value>Heruntergeladen</value>
+  </data>
+  <data name="Filter_Action_Modified" xml:space="preserve">
+    <value>Geändert</value>
+  </data>
+  <data name="Filter_Action_Deleted" xml:space="preserve">
+    <value>Gelöscht</value>
+  </data>
+  <data name="Filter_Action_Synced" xml:space="preserve">
+    <value>Synchronisiert</value>
+  </data>
+  <data name="Filter_Action_Errors" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="Filter_FileType_All" xml:space="preserve">
+    <value>Alle</value>
+  </data>
+  <data name="Filter_FileType_Pdf" xml:space="preserve">
+    <value>PDF</value>
+  </data>
+  <data name="Filter_FileType_Sheets" xml:space="preserve">
+    <value>Tabellen</value>
+  </data>
+  <data name="Filter_FileType_Docs" xml:space="preserve">
+    <value>Dokumente</value>
+  </data>
+  <data name="Filter_FileType_Images" xml:space="preserve">
+    <value>Bilder</value>
+  </data>
+  <data name="Filter_FileType_Archives" xml:space="preserve">
+    <value>Archive</value>
+  </data>
+  <data name="Filter_FileType_Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Filter_FileType_Other" xml:space="preserve">
+    <value>Sonstige</value>
+  </data>
+  <data name="Activity_CallbacksReady" xml:space="preserve">
+    <value>Dateisystemrückrufe sind bereit</value>
+  </data>
+  <data name="Activity_CheckingStaleRegistrations" xml:space="preserve">
+    <value>Es werden veraltete Synchronisierungsregistrierungen geprüft</value>
+  </data>
+  <data name="Activity_CleanedStaleFolder" xml:space="preserve">
+    <value>Veralteter Synchronisierungsordner wurde bereinigt</value>
+  </data>
+  <data name="Activity_CloudDriveReady" xml:space="preserve">
+    <value>CloudDrive ist bereit</value>
+  </data>
+  <data name="Activity_Deleting" xml:space="preserve">
+    <value>{0} wird gelöscht</value>
+  </data>
+  <data name="Activity_Downloading" xml:space="preserve">
+    <value>{0} wird heruntergeladen</value>
+  </data>
+  <data name="Activity_Event_Title" xml:space="preserve">
+    <value>Cloud-Aktivität</value>
+  </data>
+  <data name="Activity_ExistingSyncRootFound" xml:space="preserve">
+    <value>Bestehende Sync-Root-Registrierung gefunden</value>
+  </data>
+  <data name="Activity_FailedToDelete" xml:space="preserve">
+    <value>{0} konnte nicht gelöscht werden: {1}</value>
+  </data>
+  <data name="Activity_FailedToDownload" xml:space="preserve">
+    <value>{0} konnte nicht heruntergeladen werden: {1}</value>
+  </data>
+  <data name="Activity_FailedToList" xml:space="preserve">
+    <value>{0} konnte nicht aufgelistet werden: {1}</value>
+  </data>
+  <data name="Activity_FailedToUpload" xml:space="preserve">
+    <value>{0} konnte nicht hochgeladen werden: {1}</value>
+  </data>
+  <data name="Activity_FileNotFoundOnServer" xml:space="preserve">
+    <value>Datei auf dem Server nicht gefunden: {0}</value>
+  </data>
+  <data name="Activity_FolderRegisteredInExplorer" xml:space="preserve">
+    <value>Synchronisierungsordner im Explorer registriert</value>
+  </data>
+  <data name="Activity_FoundStaleRegistration" xml:space="preserve">
+    <value>Veraltete Synchronisierungsregistrierung gefunden</value>
+  </data>
+  <data name="Activity_Hydrating" xml:space="preserve">
+    <value>Angepinnte Datei {0} wird heruntergeladen</value>
+  </data>
+  <data name="Activity_Listing" xml:space="preserve">
+    <value>{0} wird aufgelistet</value>
+  </data>
+  <data name="Activity_NoStaleRegistrations" xml:space="preserve">
+    <value>Keine veralteten Synchronisierungsregistrierungen gefunden</value>
+  </data>
+  <data name="Activity_Object_Folder" xml:space="preserve">
+    <value>Ordner</value>
+  </data>
+  <data name="Activity_Object_Item" xml:space="preserve">
+    <value>Element</value>
+  </data>
+  <data name="Activity_RemoteListingFailed" xml:space="preserve">
+    <value>Remote-Auflistung fehlgeschlagen: {0}</value>
+  </data>
+  <data name="Activity_RemoteListingVerified" xml:space="preserve">
+    <value>Remote-Auflistung mit {0} Element(en) verifiziert</value>
+  </data>
+  <data name="Activity_ServerConnectionVerifiedElapsed" xml:space="preserve">
+    <value>Serververbindung nach {0} Sekunden verifiziert</value>
+  </data>
+  <data name="Activity_ServerConnectionVerifiedMilliseconds" xml:space="preserve">
+    <value>Serververbindung in {0} ms verifiziert</value>
+  </data>
+  <data name="Activity_ServerConnectionWaiting" xml:space="preserve">
+    <value>Es wird gewartet, bis der Server erreichbar ist</value>
+  </data>
+  <data name="Activity_ShutDownRegistered" xml:space="preserve">
+    <value>Herunterfahr-Handler registriert</value>
+  </data>
+  <data name="Activity_ShuttingDown" xml:space="preserve">
+    <value>CloudDrive wird beendet</value>
+  </data>
+  <data name="Activity_StaleCleanupFailed" xml:space="preserve">
+    <value>Bereinigung veralteter Synchronisierungsordner fehlgeschlagen</value>
+  </data>
+  <data name="Activity_Subtitle_CreatedIn" xml:space="preserve">
+    <value>{0} erstellt in</value>
+  </data>
+  <data name="Activity_Subtitle_DeletedFrom" xml:space="preserve">
+    <value>{0} gelöscht aus</value>
+  </data>
+  <data name="Activity_Subtitle_DownloadedFrom" xml:space="preserve">
+    <value>{0} heruntergeladen aus</value>
+  </data>
+  <data name="Activity_Subtitle_DownloadingFrom" xml:space="preserve">
+    <value>Herunterladen von {0} aus</value>
+  </data>
+  <data name="Activity_Subtitle_NeedsAttentionIn" xml:space="preserve">
+    <value>Benötigt Aufmerksamkeit in</value>
+  </data>
+  <data name="Activity_Subtitle_SyncedIn" xml:space="preserve">
+    <value>{0} synchronisiert in</value>
+  </data>
+  <data name="Activity_Subtitle_UpdatedIn" xml:space="preserve">
+    <value>{0} aktualisiert in</value>
+  </data>
+  <data name="Activity_Subtitle_UploadedTo" xml:space="preserve">
+    <value>{0} hochgeladen nach</value>
+  </data>
+  <data name="Activity_Subtitle_UploadingTo" xml:space="preserve">
+    <value>Hochladen von {0} nach</value>
+  </data>
+  <data name="Activity_Uploading" xml:space="preserve">
+    <value>{0} wird hochgeladen</value>
+  </data>
+  <data name="Activity_VerifyingRemoteListing" xml:space="preserve">
+    <value>Remote-Ordnerauflistung wird verifiziert</value>
+  </data>
+  <data name="Activity_VerifyingServerConnection" xml:space="preserve">
+    <value>Serververbindung wird verifiziert</value>
+  </data>
+  <data name="Activity_WaitingForServerElapsed" xml:space="preserve">
+    <value>Server nach {0} Sekunden immer noch nicht erreichbar</value>
+  </data>
+  <data name="Activity_WatchdogScheduledTaskRegistered" xml:space="preserve">
+    <value>Watchdog-Aufgabe in der Aufgabenplanung registriert</value>
+  </data>
+  <data name="Activity_WatchdogServiceRegistered" xml:space="preserve">
+    <value>Watchdog-Windows-Dienst registriert</value>
+  </data>
+  <data name="HealthCheck_Watchdog_Name" xml:space="preserve">
+    <value>Watchdog</value>
+  </data>
+  <data name="Watchdog_Status_Unknown" xml:space="preserve">
+    <value>Watchdog-Status nicht verfÃ¼gbar</value>
+  </data>
+  <data name="Watchdog_Status_NotCheckedYet" xml:space="preserve">
+    <value>Der Watchdog hat noch keinen Lauf abgeschlossen.</value>
+  </data>
+  <data name="Watchdog_Status_Connected" xml:space="preserve">
+    <value>Der Watchdog hat eine funktionierende CloudDrive-Verbindung bestÃ¤tigt.</value>
+  </data>
+  <data name="Watchdog_Status_AppNotRunning" xml:space="preserve">
+    <value>CloudDrive wird derzeit nicht ausgefÃ¼hrt.</value>
+  </data>
+  <data name="Watchdog_Status_ConfigurationMissing" xml:space="preserve">
+    <value>Der Watchdog kann CloudDrive erst prÃ¼fen, wenn die WebDAV-Verbindung eingerichtet ist.</value>
+  </data>
+  <data name="Watchdog_Status_CredentialsMissing" xml:space="preserve">
+    <value>Der Watchdog kann CloudDrive nicht prÃ¼fen, weil Zugangsdaten fehlen.</value>
+  </data>
+  <data name="Watchdog_Status_SyncRootMissing" xml:space="preserve">
+    <value>Der Synchronisierungsordner fehlt oder ist nicht verfÃ¼gbar.</value>
+  </data>
+  <data name="Watchdog_Status_ServerUnreachable" xml:space="preserve">
+    <value>Der WebDAV-Server konnte nicht erreicht werden.</value>
+  </data>
+  <data name="Watchdog_Status_HighLatency" xml:space="preserve">
+    <value>Der WebDAV-Server hat zu langsam geantwortet ({0} ms).</value>
+  </data>
+  <data name="Watchdog_Status_HighLatencyUnknown" xml:space="preserve">
+    <value>Der WebDAV-Server hat zu langsam geantwortet.</value>
+  </data>
+  <data name="Watchdog_Status_ListingFailed" xml:space="preserve">
+    <value>Das Auflisten des entfernten Stammordners ist fehlgeschlagen.</value>
+  </data>
+  <data name="Watchdog_Status_UnexpectedError" xml:space="preserve">
+    <value>Beim Watchdog ist ein unerwarteter Fehler aufgetreten.</value>
+  </data>
+  <data name="Watchdog_Message_CleanupLoadFailed" xml:space="preserve">
+    <value>Der Watchdog konnte die Markierung fÃ¼r eine ausstehende Bereinigung nicht lesen.</value>
+  </data>
+  <data name="Watchdog_Message_CleanupMarkerRemoved" xml:space="preserve">
+    <value>Eine veraltete Bereinigungsmarkierung fÃ¼r {0} wurde entfernt, weil der Ordner bereits verschwunden war.</value>
+  </data>
+  <data name="Watchdog_Message_CleanupSucceeded" xml:space="preserve">
+    <value>Der Watchdog hat den ausstehenden Bereinigungsordner {0} entfernt.</value>
+  </data>
+  <data name="Watchdog_Message_CleanupExpired" xml:space="preserve">
+    <value>Eine abgelaufene Bereinigungsmarkierung fÃ¼r {0} wurde nach wiederholten Fehlern entfernt.</value>
+  </data>
+  <data name="Watchdog_Message_CleanupFailed" xml:space="preserve">
+    <value>Der Watchdog konnte den ausstehenden Bereinigungsordner {0} nicht lÃ¶schen.</value>
+  </data>
+  <data name="Watchdog_Message_ExplorerUpdateFailed" xml:space="preserve">
+    <value>Der Watchdog konnte den Verbindungsstatus im Windows-Explorer nicht aktualisieren.</value>
+  </data>
+  <data name="Watchdog_Message_Connected" xml:space="preserve">
+    <value>Der Watchdog hat bestÃ¤tigt, dass CloudDrive verbunden ist.</value>
+  </data>
+  <data name="Watchdog_Message_ConnectedWithLatency" xml:space="preserve">
+    <value>Der Watchdog hat bestÃ¤tigt, dass CloudDrive verbunden ist ({0} ms).</value>
+  </data>
+  <data name="Watchdog_Message_AppNotRunning" xml:space="preserve">
+    <value>Der Watchdog hat erkannt, dass CloudDrive nicht ausgefÃ¼hrt wird.</value>
+  </data>
+  <data name="Watchdog_Message_ConfigurationMissing" xml:space="preserve">
+    <value>Der Watchdog wartet auf CloudDrive-Verbindungseinstellungen.</value>
+  </data>
+  <data name="Watchdog_Message_CredentialsMissing" xml:space="preserve">
+    <value>Der Watchdog wartet auf CloudDrive-Zugangsdaten.</value>
+  </data>
+  <data name="Watchdog_Message_SyncRootMissing" xml:space="preserve">
+    <value>Der Watchdog konnte den CloudDrive-Synchronisierungsordner nicht finden.</value>
+  </data>
+  <data name="Watchdog_Message_ServerUnreachable" xml:space="preserve">
+    <value>Der Watchdog konnte den WebDAV-Server nicht erreichen.</value>
+  </data>
+  <data name="Watchdog_Message_HighLatency" xml:space="preserve">
+    <value>Der Watchdog hat langsame Serverantworten erkannt ({0} ms).</value>
+  </data>
+  <data name="Watchdog_Message_HighLatencyUnknown" xml:space="preserve">
+    <value>Der Watchdog hat langsame Serverantworten erkannt.</value>
+  </data>
+  <data name="Watchdog_Message_ListingFailed" xml:space="preserve">
+    <value>Der Watchdog konnte den entfernten Stammordner nicht auflisten.</value>
+  </data>
+  <data name="Watchdog_Message_UnexpectedError" xml:space="preserve">
+    <value>Beim Watchdog ist ein unerwarteter Fehler aufgetreten.</value>
+  </data>
+  <data name="Watchdog_Message_UnexpectedErrorWithDetail" xml:space="preserve">
+    <value>Beim Watchdog ist ein unerwarteter Fehler aufgetreten: {0}</value>
+  </data>
+  <data name="ActivityAction_Created" xml:space="preserve">
+    <value>Erstellt</value>
+  </data>
+  <data name="ActivityAction_Deleted" xml:space="preserve">
+    <value>Gelöscht</value>
+  </data>
+  <data name="ActivityAction_Downloaded" xml:space="preserve">
+    <value>Heruntergeladen</value>
+  </data>
+  <data name="ActivityAction_Error" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="ActivityAction_Modified" xml:space="preserve">
+    <value>Geändert</value>
+  </data>
+  <data name="ActivityAction_Synced" xml:space="preserve">
+    <value>Synchronisiert</value>
+  </data>
+  <data name="ActivityAction_System" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="ActivityAction_Uploaded" xml:space="preserve">
+    <value>Hochgeladen</value>
+  </data>
+  <data name="ActivityPanel_EmptyTitle" xml:space="preserve">
+    <value>Noch keine Aktivität</value>
+  </data>
+  <data name="ActivityPanel_EmptyDescription" xml:space="preserve">
+    <value>Sobald CloudDrive arbeitet, erscheint hier die aktuelle Synchronisierungsaktivität.</value>
+  </data>
+  <data name="ActivityPanel_NeedsAttention" xml:space="preserve">
+    <value>Benötigt Aufmerksamkeit</value>
+  </data>
+  <data name="ActivityPanel_OpenProblemCenter" xml:space="preserve">
+    <value>Problemzentrale öffnen</value>
+  </data>
+  <data name="ActivityPanel_Tooltip_Settings" xml:space="preserve">
+    <value>Kontrollzentrum öffnen</value>
+  </data>
+  <data name="ActivityPanel_ViewAllActivity" xml:space="preserve">
+    <value>Alle Aktivitäten anzeigen</value>
+  </data>
+  <data name="Banner_SyncPaused_Title" xml:space="preserve">
+    <value>Synchronisierung pausiert</value>
+  </data>
+  <data name="Banner_SyncPaused_Description" xml:space="preserve">
+    <value>Die Synchronisierung ist pausiert. Fortsetzen, wenn Sie bereit sind.</value>
+  </data>
+  <data name="Banner_ConnectionAttention_Title" xml:space="preserve">
+    <value>Verbindung benötigt Aufmerksamkeit</value>
+  </data>
+  <data name="Banner_ProblemsAttention_Title" xml:space="preserve">
+    <value>Probleme müssen geprüft werden</value>
+  </data>
+  <data name="Banner_ProblemsAttention_Description" xml:space="preserve">
+    <value>{0} offene Probleme benötigen Aufmerksamkeit</value>
+  </data>
+  <data name="Banner_ProblemsAttention_DescriptionWithConflicts" xml:space="preserve">
+    <value>{0} offene Probleme, davon {1} Konflikte</value>
+  </data>
+  <data name="Banner_ChangesSyncing_Title" xml:space="preserve">
+    <value>Änderungen werden noch synchronisiert</value>
+  </data>
+  <data name="Banner_ChangesSyncing_Description" xml:space="preserve">
+    <value>{0} Element(e) warten noch auf die Synchronisierung</value>
+  </data>
+  <data name="Banner_ProblemsFallback_Description" xml:space="preserve">
+    <value>{0} Element(e) zeigen noch Fehler oder ausstehende Wiederherstellung</value>
+  </data>
+  <data name="Metrics_Flyout_Sync_Label" xml:space="preserve">
+    <value>Synchronisierung</value>
+  </data>
+  <data name="Metrics_Flyout_Pending" xml:space="preserve">
+    <value>{0} ausstehend</value>
+  </data>
+  <data name="Metrics_Flyout_Sync_SubtextPending" xml:space="preserve">
+    <value>Änderungen müssen noch übertragen werden</value>
+  </data>
+  <data name="Metrics_Flyout_Sync_SubtextState" xml:space="preserve">
+    <value>Aktueller Sync-Status</value>
+  </data>
+  <data name="Metrics_Flyout_Storage_Label" xml:space="preserve">
+    <value>Lokale Daten</value>
+  </data>
+  <data name="Metrics_Flyout_TrackedItems" xml:space="preserve">
+    <value>{0} verfolgte Elemente</value>
+  </data>
+  <data name="Metrics_Flyout_Services_Label" xml:space="preserve">
+    <value>Dienste</value>
+  </data>
+  <data name="Metrics_Flyout_Services_Online" xml:space="preserve">
+    <value>Online</value>
+  </data>
+  <data name="Metrics_Flyout_Services_Offline" xml:space="preserve">
+    <value>Offline</value>
+  </data>
+  <data name="Metrics_Flyout_Uptime_Label" xml:space="preserve">
+    <value>Laufzeit</value>
+  </data>
+  <data name="Metrics_Flyout_Uptime_Subtext" xml:space="preserve">
+    <value>Aktuelle App-Sitzung</value>
+  </data>
+  <data name="Metrics_TrackedItems_Label" xml:space="preserve">
+    <value>Verfolgte Elemente</value>
+  </data>
+  <data name="Metrics_TrackedItems_Subtext" xml:space="preserve">
+    <value>Dateien und Ordner im Synchronisierungsindex</value>
+  </data>
+  <data name="Metrics_LocalData_Label" xml:space="preserve">
+    <value>Verfolgter Speicher</value>
+  </data>
+  <data name="Metrics_LocalData_Subtext" xml:space="preserve">
+    <value>Geschätzter lokaler Datenbedarf</value>
+  </data>
+  <data name="Metrics_RecentActivity_Label" xml:space="preserve">
+    <value>Letzte Aktivität</value>
+  </data>
+  <data name="Metrics_RecentActivity_Subtext" xml:space="preserve">
+    <value>Abgeschlossene Aktionen in den letzten 7 Tagen</value>
+  </data>
+  <data name="Metrics_Errors_Label" xml:space="preserve">
+    <value>Fehler (7 Tage)</value>
+  </data>
+  <data name="Metrics_Errors_TrendBetter" xml:space="preserve">
+    <value>{0} weniger als in den vorherigen 7 Tagen</value>
+  </data>
+  <data name="Metrics_Errors_TrendWorse" xml:space="preserve">
+    <value>{0} mehr als in den vorherigen 7 Tagen</value>
+  </data>
+  <data name="HealthCheck_WebDav_Name" xml:space="preserve">
+    <value>WebDAV-Verbindung</value>
+  </data>
+  <data name="HealthCheck_Updater_Name" xml:space="preserve">
+    <value>Updater</value>
+  </data>
+  <data name="HealthCheck_Updater_Status_Reachable" xml:space="preserve">
+    <value>Erreichbar</value>
+  </data>
+  <data name="HealthCheck_Updater_Status_UpdateReady" xml:space="preserve">
+    <value>Update bereit</value>
+  </data>
+  <data name="HealthCheck_Updater_Status_Checking" xml:space="preserve">
+    <value>Pruefung laeuft</value>
+  </data>
+  <data name="HealthCheck_Updater_Status_Failed" xml:space="preserve">
+    <value>Fehlgeschlagen</value>
+  </data>
+  <data name="HealthCheck_Updater_Status_NotInstalled" xml:space="preserve">
+    <value>Nicht installiert</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_NotChecked" xml:space="preserve">
+    <value>Die Update-Quelle wurde noch nicht geprueft.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_Reachable" xml:space="preserve">
+    <value>Die Release-Quelle ist erreichbar.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_UpdateReady" xml:space="preserve">
+    <value>Ein heruntergeladenes Update ist bereit zur Installation.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_UpdateReadyWithVersion" xml:space="preserve">
+    <value>Update {0} ist zur Installation bereit.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_Checking" xml:space="preserve">
+    <value>Die Release-Quelle wird jetzt geprueft.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_Failed" xml:space="preserve">
+    <value>Die Update-Pruefung ist fehlgeschlagen.</value>
+  </data>
+  <data name="HealthCheck_Updater_Detail_NotInstalled" xml:space="preserve">
+    <value>Automatische Updates sind nur in installierten App-Builds verfuegbar.</value>
+  </data>
+  <data name="HealthCheck_Updater_Source" xml:space="preserve">
+    <value>Quelle: {0}</value>
+  </data>
+  <data name="HealthCheck_Updater_CurrentVersion" xml:space="preserve">
+    <value>Aktuelle Version: {0}</value>
+  </data>
+  <data name="HealthCheck_Updater_AvailableVersion" xml:space="preserve">
+    <value>Verfuegbare Version: {0}</value>
+  </data>
+  <data name="HealthCheck_Updater_AttemptedLocation" xml:space="preserve">
+    <value>Versuchtes Ziel: {0}</value>
+  </data>
+  <data name="HealthCheck_Updater_Failure" xml:space="preserve">
+    <value>Fehler: {0}</value>
+  </data>
+  <data name="HealthCheck_LastChecked_Never" xml:space="preserve">
+    <value>Noch nicht geprüft</value>
+  </data>
+  <data name="HealthCheck_SyncRoot_Name" xml:space="preserve">
+    <value>Synchronisierungsordner</value>
+  </data>
+  <data name="HealthCheck_SyncRoot_LastChecked" xml:space="preserve">
+    <value>Geprüft um {0}</value>
+  </data>
+  <data name="HealthCheck_Database_Name" xml:space="preserve">
+    <value>Sync-Datenbank</value>
+  </data>
+  <data name="HealthCheck_Database_NoPath" xml:space="preserve">
+    <value>Kein Datenbankpfad verfügbar</value>
+  </data>
+  <data name="HealthCheck_Database_NeedsAttention" xml:space="preserve">
+    <value>Benötigt Aufmerksamkeit</value>
+  </data>
+  <data name="HealthCheck_AppSession_Name" xml:space="preserve">
+    <value>App-Sitzung</value>
+  </data>
+  <data name="HealthCheck_AppSession_Description" xml:space="preserve">
+    <value>Aktuelle App-Sitzung und Laufzeit</value>
+  </data>
+  <data name="Health_Detail_NotConfigured" xml:space="preserve">
+    <value>Die Verbindung ist noch nicht konfiguriert</value>
+  </data>
+  <data name="Health_Detail_Healthy" xml:space="preserve">
+    <value>Server antwortete in {0} ms</value>
+  </data>
+  <data name="Health_Detail_Failed" xml:space="preserve">
+    <value>Integritätsprüfung fehlgeschlagen: {0}</value>
+  </data>
+  <data name="Health_Detail_Unavailable" xml:space="preserve">
+    <value>Es sind noch keine Integritätsdetails verfügbar</value>
+  </data>
+  <data name="Health_Failure_ServerUnreachable" xml:space="preserve">
+    <value>Server nicht erreichbar</value>
+  </data>
+  <data name="Health_Failure_HighLatency" xml:space="preserve">
+    <value>Hohe Latenz</value>
+  </data>
+  <data name="Health_Failure_ListingFailed" xml:space="preserve">
+    <value>Remote-Auflistung fehlgeschlagen</value>
+  </data>
+  <data name="Health_ServerRespondedWithStatus" xml:space="preserve">
+    <value>Server antwortete mit HTTP {0}</value>
+  </data>
+  <data name="Health_RequestTimedOut" xml:space="preserve">
+    <value>Die Anfrage hat das Zeitlimit überschritten.</value>
+  </data>
+  <data name="SyncState_Disconnected" xml:space="preserve">
+    <value>Getrennt</value>
+  </data>
+  <data name="SyncState_Syncing" xml:space="preserve">
+    <value>Synchronisiert gerade</value>
+  </data>
+  <data name="SyncState_Synced" xml:space="preserve">
+    <value>Synchronisiert</value>
+  </data>
+  <data name="SyncState_Paused" xml:space="preserve">
+    <value>Pausiert</value>
+  </data>
+  <data name="SyncState_Error" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="SyncStatus_PendingUpload" xml:space="preserve">
+    <value>Upload ausstehend</value>
+  </data>
+  <data name="SyncStatus_PendingDownload" xml:space="preserve">
+    <value>Download ausstehend</value>
+  </data>
+  <data name="SyncStatus_Syncing" xml:space="preserve">
+    <value>Synchronisiert gerade</value>
+  </data>
+  <data name="SyncStatus_Synced" xml:space="preserve">
+    <value>Synchronisiert</value>
+  </data>
+  <data name="SyncStatus_Error" xml:space="preserve">
+    <value>Fehler</value>
+  </data>
+  <data name="SyncStatus_Conflict" xml:space="preserve">
+    <value>Konflikt</value>
+  </data>
+  <data name="Time_SecondAgo" xml:space="preserve">
+    <value>vor {0} Sekunde</value>
+  </data>
+  <data name="Time_SecondsAgo" xml:space="preserve">
+    <value>vor {0} Sekunden</value>
+  </data>
+  <data name="Time_MinuteAgo" xml:space="preserve">
+    <value>vor {0} Minute</value>
+  </data>
+  <data name="Time_MinutesAgo" xml:space="preserve">
+    <value>vor {0} Minuten</value>
+  </data>
+  <data name="Time_HourAgo" xml:space="preserve">
+    <value>vor {0} Stunde</value>
+  </data>
+  <data name="Time_HoursAgo" xml:space="preserve">
+    <value>vor {0} Stunden</value>
+  </data>
+  <data name="Time_Uptime_Seconds" xml:space="preserve">
+    <value>{0} Sek</value>
+  </data>
+  <data name="Time_Uptime_Minutes" xml:space="preserve">
+    <value>{0} Min</value>
+  </data>
+  <data name="Time_Uptime_HoursMinutes" xml:space="preserve">
+    <value>{0} Std {1} Min</value>
+  </data>
+  <data name="Time_Uptime_DaysHours" xml:space="preserve">
+    <value>{0} T {1} Std</value>
+  </data>
+  <data name="Csv_Header" xml:space="preserve">
+    <value>Zeitstempel,Titel,Zusammenfassung,Ort,Status</value>
+  </data>
+  <data name="Problem_Action_OpenConflictCopy" xml:space="preserve">
+    <value>Konfliktkopie öffnen</value>
+  </data>
+  <data name="Problem_Action_OpenOriginal" xml:space="preserve">
+    <value>Original öffnen</value>
+  </data>
+  <data name="Problem_Action_HealthCheck" xml:space="preserve">
+    <value>Integritätsprüfung öffnen</value>
+  </data>
+  <data name="Problem_CannotReachServer_Title" xml:space="preserve">
+    <value>Server nicht erreichbar</value>
+  </data>
+  <data name="Problem_CannotReachServer_Summary" xml:space="preserve">
+    <value>Der WebDAV-Server konnte nicht erreicht werden.</value>
+  </data>
+  <data name="Problem_CannotReachServer_Detail" xml:space="preserve">
+    <value>CloudDrive konnte {0} beim Start nicht erreichen.</value>
+  </data>
+  <data name="Problem_Conflict_Title" xml:space="preserve">
+    <value>Konflikt erkannt für {0}</value>
+  </data>
+  <data name="Problem_Conflict_Summary_Generic" xml:space="preserve">
+    <value>Ein Konflikt wurde erkannt und Ihre lokalen Änderungen wurden gesichert.</value>
+  </data>
+  <data name="Problem_Conflict_Summary_WithCopy" xml:space="preserve">
+    <value>Ihre lokalen Änderungen wurden als {0} gespeichert.</value>
+  </data>
+  <data name="Problem_Conflict_Detail" xml:space="preserve">
+    <value>Die Remote-Version wurde beibehalten, und Ihre lokalen Änderungen wurden als separate Kopie gesichert.</value>
+  </data>
+  <data name="Problem_ConnectionLost_Title" xml:space="preserve">
+    <value>Verbindung verloren</value>
+  </data>
+  <data name="Problem_ConnectionLost_Summary" xml:space="preserve">
+    <value>Die Synchronisierung wartet darauf, dass die Serververbindung zurückkehrt.</value>
+  </data>
+  <data name="Problem_ConnectionLost_Detail" xml:space="preserve">
+    <value>CloudDrive hat {0} aufeinanderfolgende Verbindungsfehler erkannt.</value>
+  </data>
+  <data name="Problem_CouldNotSync_Title" xml:space="preserve">
+    <value>{0} konnte nicht synchronisiert werden</value>
+  </data>
+  <data name="Problem_ImportedConflict_Title" xml:space="preserve">
+    <value>Konflikt erkannt für {0}</value>
+  </data>
+  <data name="Problem_ImportedConflict_Summary" xml:space="preserve">
+    <value>Das Element ist als Konflikt markiert und muss geprüft werden.</value>
+  </data>
+  <data name="Problem_ImportedUpload_Summary" xml:space="preserve">
+    <value>Das Element wartet auf den Upload oder benötigt Aufmerksamkeit.</value>
+  </data>
+  <data name="Problem_Imported_Detail" xml:space="preserve">
+    <value>Dieses Problem wurde aus dem aktuellen Zustand der Synchronisierungsdatenbank rekonstruiert.</value>
+  </data>
+  <data name="Problem_RemoteFolder_Title" xml:space="preserve">
+    <value>Prüfung des Remote-Ordners fehlgeschlagen</value>
+  </data>
+  <data name="Problem_RemoteFolder_Summary" xml:space="preserve">
+    <value>CloudDrive konnte den Remote-Ordner nicht auflisten.</value>
+  </data>
+  <data name="Problem_RemoteSync_Title" xml:space="preserve">
+    <value>Remote-Synchronisierung fehlgeschlagen</value>
+  </data>
+  <data name="Problem_RemoteSync_Summary" xml:space="preserve">
+    <value>Der Remote-Synchronisierungslauf ist fehlgeschlagen und wird erneut versucht.</value>
+  </data>
+  <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
+    <value>{0} konnte auf dem Server nicht gelöscht werden</value>
+  </data>
+  <data name="Problem_Upload_RenameSummary" xml:space="preserve">
+    <value>{0} konnte auf dem Server nicht umbenannt oder verschoben werden</value>
+  </data>
+  <data name="Problem_Upload_DefaultSummary" xml:space="preserve">
+    <value>Änderungen für {0} konnten nicht synchronisiert werden</value>
+  </data>
+  <data name="Problem_Upload_Summary" xml:space="preserve">
+    <value>CloudDrive konnte {0} nicht synchronisieren.</value>
+  </data>
+  <data name="Problem_Upload_SummarySuffix" xml:space="preserve">
+    <value>{0} Bitte prüfen Sie die Details und versuchen Sie es erneut.</value>
+  </data>
+  <data name="Problem_Kind_Conflict" xml:space="preserve">
+    <value>Konflikt</value>
+  </data>
+  <data name="Problem_Kind_Connection" xml:space="preserve">
+    <value>Verbindung</value>
+  </data>
+  <data name="Problem_Kind_SyncError" xml:space="preserve">
+    <value>Synchronisierungsfehler</value>
+  </data>
+  <data name="Problem_Kind_UploadError" xml:space="preserve">
+    <value>Uploadfehler</value>
+  </data>
+  <data name="Problem_Kind_DownloadError" xml:space="preserve">
+    <value>Downloadfehler</value>
+  </data>
+  <data name="Problem_Kind_Generic" xml:space="preserve">
+    <value>Problem</value>
+  </data>
+  <data name="Problem_Occurrence_First" xml:space="preserve">
+    <value>Erstmalig aufgetreten</value>
+  </data>
+  <data name="Problem_Occurrence_Repeated" xml:space="preserve">
+    <value>{0} Mal aufgetreten</value>
+  </data>
+  <data name="Settings_AccountDisplay_None" xml:space="preserve">
+    <value>Nicht angemeldet</value>
+  </data>
+  <data name="Settings_ProblemSummary_None" xml:space="preserve">
+    <value>Keine offenen Probleme</value>
+  </data>
+  <data name="Settings_ProblemSummary_Count" xml:space="preserve">
+    <value>{0} offene Probleme</value>
+  </data>
+  <data name="Settings_StorageSummary_None" xml:space="preserve">
+    <value>Noch keine Speicherdaten verfügbar</value>
+  </data>
+  <data name="Settings_StorageSummary_Count" xml:space="preserve">
+    <value>{0} über {1} verfolgte Elemente</value>
+  </data>
+  <data name="Settings_StorageSuggestion_VerifySyncRoot" xml:space="preserve">
+    <value>Überprüfen Sie Pfad und Konfiguration des Synchronisierungsordners.</value>
+  </data>
+  <data name="Settings_StorageSuggestion_ReviewProblems" xml:space="preserve">
+    <value>Prüfen Sie die offenen Probleme auf Konflikte oder Fehler.</value>
+  </data>
+  <data name="Settings_StorageSuggestion_ResolveErrors" xml:space="preserve">
+    <value>Beheben Sie Synchronisierungsfehler, um wieder einen gesunden Zustand zu erreichen.</value>
+  </data>
+  <data name="Settings_StorageSuggestion_Pending" xml:space="preserve">
+    <value>Einige Elemente sind noch ausstehend. CloudDrive sollte bald aufholen.</value>
+  </data>
+  <data name="Settings_StorageSuggestion_Healthy" xml:space="preserve">
+    <value>Alles sieht gut aus.</value>
+  </data>
+  <data name="Settings_Status_HealthChecksUpdated" xml:space="preserve">
+    <value>Integritätsprüfungen aktualisiert</value>
+  </data>
+  <data name="Settings_Status_SettingsSaved" xml:space="preserve">
+    <value>Einstellungen gespeichert</value>
+  </data>
+  <data name="Settings_Status_EnterWebDavUrl" xml:space="preserve">
+    <value>Bitte zuerst eine WebDAV-URL eingeben</value>
+  </data>
+  <data name="Settings_Status_TestingConnection" xml:space="preserve">
+    <value>Verbindung wird getestet...</value>
+  </data>
+  <data name="Settings_Status_ConnectionSuccessful" xml:space="preserve">
+    <value>Verbindung erfolgreich ({0} ms)</value>
+  </data>
+  <data name="Settings_Status_ConnectionFailed" xml:space="preserve">
+    <value>Verbindungstest fehlgeschlagen</value>
+  </data>
+  <data name="Settings_Status_ConnectionFailedWithMessage" xml:space="preserve">
+    <value>Verbindungstest fehlgeschlagen: {0}</value>
+  </data>
+  <data name="Settings_SelectSyncRootFolder" xml:space="preserve">
+    <value>Synchronisierungsordner auswählen</value>
+  </data>
+  <data name="Settings_Status_ResetUnavailable" xml:space="preserve">
+    <value>Zurücksetzen ist derzeit nicht verfügbar</value>
+  </data>
+  <data name="Settings_Reset_Title" xml:space="preserve">
+    <value>Lokale Daten zurücksetzen</value>
+  </data>
+  <data name="Settings_Reset_Message" xml:space="preserve">
+    <value>Dies trennt CloudDrive und entfernt den Synchronisierungsordner unter:
+{0}
+
+Lokale Metadaten werden gelöscht, Ihre gespeicherten Kontoeinstellungen bleiben jedoch erhalten.</value>
+  </data>
+  <data name="Settings_ResetFull_Title" xml:space="preserve">
+    <value>Konfiguration und Protokolle zurücksetzen</value>
+  </data>
+  <data name="Settings_ResetFull_Message" xml:space="preserve">
+    <value>Dies trennt CloudDrive und entfernt den Synchronisierungsordner unter:
+{0}
+
+Gespeicherte Kontoeinstellungen, das gespeicherte Passwort, App-Einstellungen, lokale Metadaten und Protokolle werden vollständig gelöscht.</value>
+  </data>
+  <data name="Settings_Reset_PendingUploads" xml:space="preserve">
+    <value>
+
+{0} Element(e) warten noch auf Upload oder Wiederherstellung.</value>
+  </data>
+  <data name="Settings_ExportCsv_Title" xml:space="preserve">
+    <value>Aktivitätsverlauf exportieren</value>
+  </data>
+  <data name="Settings_ExportCsv_Filter" xml:space="preserve">
+    <value>CSV-Dateien (*.csv)|*.csv</value>
+  </data>
+  <data name="Settings_ExportCsv_FileName" xml:space="preserve">
+    <value>clouddrive-aktivitaet-{0}.csv</value>
+  </data>
+  <data name="Reset_RestartRequired_Title" xml:space="preserve">
+    <value>Neustart erforderlich</value>
+  </data>
+  <data name="Reset_RestartRequired_Message" xml:space="preserve">
+    <value>CloudDrive muss Windows neu starten, um die Bereinigung des Synchronisierungsordners abzuschließen.</value>
+  </data>
+  <data name="Install_CleanupWarning_Title" xml:space="preserve">
+    <value>Vorhandenen Sync-Ordner bereinigen</value>
+  </data>
+  <data name="Install_CleanupWarning_Message" xml:space="preserve">
+    <value>CloudDrive hat vorhandene Dateien im Synchronisierungsordner gefunden:
+{0}
+
+Um diese Installation abzuschliessen, muss CloudDrive diesen Ordner loeschen und alte lokale Sync-Daten bereinigen. Ihre gespeicherten Kontoeinstellungen und das gespeicherte Passwort bleiben erhalten.
+
+Waehlen Sie OK, um den Ordnerinhalt zu loeschen und fortzufahren.
+Waehlen Sie Abbrechen, um hier zu stoppen und die vorhandenen Dateien zu behalten.</value>
+  </data>
+  <data name="Install_CleanupFailed_Title" xml:space="preserve">
+    <value>Bereinigung fehlgeschlagen</value>
+  </data>
+  <data name="Install_CleanupFailed_Message" xml:space="preserve">
+    <value>CloudDrive konnte die alten lokalen Daten nicht vollstaendig bereinigen. Die App wird jetzt beendet, damit vorhandene Dateien unveraendert bleiben.</value>
+  </data>
+  <data name="Tray_Tooltip_Starting" xml:space="preserve">
+    <value>Selbstläufer CloudDrive startet</value>
+  </data>
+  <data name="Tray_Tooltip_Synced" xml:space="preserve">
+    <value>Selbstläufer CloudDrive synchronisiert</value>
+  </data>
+  <data name="Tray_Tooltip_Syncing" xml:space="preserve">
+    <value>Selbstläufer CloudDrive synchronisiert gerade</value>
+  </data>
+  <data name="Tray_Tooltip_Error" xml:space="preserve">
+    <value>Selbstläufer CloudDrive benötigt Aufmerksamkeit</value>
+  </data>
+  <data name="Tray_Tooltip_Paused" xml:space="preserve">
+    <value>Selbstläufer CloudDrive pausiert</value>
+  </data>
+  <data name="Tray_Tooltip_Disconnected" xml:space="preserve">
+    <value>Selbstläufer CloudDrive getrennt</value>
+  </data>
+  <data name="Tray_Menu_OpenActivityStream" xml:space="preserve">
+    <value>Aktivitätsansicht öffnen</value>
+  </data>
+  <data name="Tray_Menu_OpenSettings" xml:space="preserve">
+    <value>Kontrollzentrum öffnen</value>
+  </data>
+  <data name="Tray_Menu_PauseSync" xml:space="preserve">
+    <value>Synchronisierung pausieren</value>
+  </data>
+  <data name="Tray_Menu_ResumeSync" xml:space="preserve">
+    <value>Synchronisierung fortsetzen</value>
+  </data>
+  <data name="Tray_Menu_Quit" xml:space="preserve">
+    <value>Selbstläufer CloudDrive beenden</value>
+  </data>
+  <data name="Tray_Menu_UpdateAvailable" xml:space="preserve">
+    <value>Update jetzt installieren</value>
+  </data>
+  <data name="Tray_Balloon_Startup_ServerUnreachable" xml:space="preserve">
+    <value>CloudDrive wurde gestartet, aber {0} konnte nicht erreicht werden.</value>
+  </data>
+  <data name="Tray_Balloon_Startup_HighLatency" xml:space="preserve">
+    <value>CloudDrive wurde gestartet, aber der Server antwortete langsam ({0} ms).</value>
+  </data>
+  <data name="Tray_Balloon_Startup_ListingFailed" xml:space="preserve">
+    <value>CloudDrive wurde gestartet, aber der Remote-Ordner konnte nicht aufgelistet werden.</value>
+  </data>
+  <data name="Tray_Balloon_Startup_Default" xml:space="preserve">
+    <value>CloudDrive wurde gestartet, aber die Verbindung benötigt Aufmerksamkeit.</value>
+  </data>
+  <data name="Tray_Balloon_CannotReachServer" xml:space="preserve">
+    <value>CloudDrive kann {0} nicht erreichen. Öffnen Sie das Kontrollzentrum, um die Verbindung zu prüfen.</value>
+  </data>
+  <data name="Tray_Balloon_ServerStillUnreachable" xml:space="preserve">
+    <value>Der Server ist weiterhin nicht erreichbar. CloudDrive versucht im Hintergrund weiter, die Verbindung herzustellen.</value>
+  </data>
+  <data name="Tray_Balloon_DisconnectedLong" xml:space="preserve">
+    <value>CloudDrive ist schon länger getrennt. Bitte prüfen Sie die Serververbindung.</value>
+  </data>
+  <data name="Tray_Balloon_StaleCleanupFailed" xml:space="preserve">
+    <value>CloudDrive konnte eine veraltete Synchronisierungsregistrierung nicht vollständig bereinigen.</value>
+  </data>
+  <data name="Tray_Balloon_UpdateReady" xml:space="preserve">
+    <value>Eine neue Version von Selbstläufer CloudDrive ist bereit zur Installation.</value>
+  </data>
+  <data name="Database_LastModified_Never" xml:space="preserve">
+    <value>Nicht verfügbar</value>
+  </data>
+  <data name="Database_LastSynced_Never" xml:space="preserve">
+    <value>Nie synchronisiert</value>
+  </data>
+  <data name="Exception_RemoteFileNotFound" xml:space="preserve">
+    <value>Die Datei {0} wurde auf dem Server nicht gefunden.</value>
+  </data>
+  <data name="ExplorerStatus_Connecting" xml:space="preserve">
+    <value>CloudDrive verbindet sich mit dem Server</value>
+  </data>
+  <data name="ExplorerStatus_Disconnected" xml:space="preserve">
+    <value>CloudDrive ist offline und kann den Server nicht erreichen</value>
+  </data>
+  <data name="ExplorerStatus_AppNotRunning" xml:space="preserve">
+    <value>CloudDrive läuft nicht</value>
+  </data>
+  <data name="StaleFolderWarning_Message" xml:space="preserve">
+    <value>Es wurde ein veralteter CloudDrive-Synchronisierungsordner erkannt. CloudDrive bereinigt ihn, bevor diese Sitzung fortgesetzt wird.</value>
+  </data>
+</root>

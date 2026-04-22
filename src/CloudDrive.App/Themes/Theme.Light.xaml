@@ -1,0 +1,64 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="Theme.ShadowColor">#FF111827</Color>
+
+    <SolidColorBrush x:Key="Theme.WindowBackgroundBrush" Color="#FFFDFDFE"/>
+    <SolidColorBrush x:Key="Theme.SurfaceBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Theme.SurfaceAltBrush" Color="#FFF9FAFB"/>
+    <SolidColorBrush x:Key="Theme.SurfaceRaisedBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Theme.SurfaceInsetBrush" Color="#FFF3F4F6"/>
+    <SolidColorBrush x:Key="Theme.HoverBrush" Color="#FFF3F4F6"/>
+    <SolidColorBrush x:Key="Theme.SelectionBrush" Color="#FFEEF2FF"/>
+    <SolidColorBrush x:Key="Theme.SelectionBorderBrush" Color="#FFC7D2FE"/>
+
+    <SolidColorBrush x:Key="Theme.BorderBrush" Color="#FFE5E7EB"/>
+    <SolidColorBrush x:Key="Theme.BorderStrongBrush" Color="#FFD1D5DB"/>
+    <SolidColorBrush x:Key="Theme.BorderSubtleBrush" Color="#FFF3F4F6"/>
+
+    <SolidColorBrush x:Key="Theme.TextPrimaryBrush" Color="#FF111827"/>
+    <SolidColorBrush x:Key="Theme.TextSecondaryBrush" Color="#FF6B7280"/>
+    <SolidColorBrush x:Key="Theme.TextMutedBrush" Color="#FF9CA3AF"/>
+
+    <SolidColorBrush x:Key="Theme.AccentBrush" Color="#FF4F46E5"/>
+    <SolidColorBrush x:Key="Theme.AccentStrongBrush" Color="#FF4338CA"/>
+    <SolidColorBrush x:Key="Theme.AccentSurfaceBrush" Color="#FFEEF2FF"/>
+    <SolidColorBrush x:Key="Theme.AccentBorderBrush" Color="#FFC7D2FE"/>
+    <SolidColorBrush x:Key="Theme.AccentTextBrush" Color="#FF4338CA"/>
+    <SolidColorBrush x:Key="Theme.LinkBrush" Color="#FF4F46E5"/>
+
+    <SolidColorBrush x:Key="Theme.ButtonBackgroundBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Theme.ButtonBorderBrush" Color="#FFD1D5DB"/>
+    <SolidColorBrush x:Key="Theme.ButtonForegroundBrush" Color="#FF111827"/>
+    <SolidColorBrush x:Key="Theme.ButtonHoverOverlayBrush" Color="#0A111827"/>
+    <SolidColorBrush x:Key="Theme.ButtonPressedOverlayBrush" Color="#14111827"/>
+
+    <SolidColorBrush x:Key="Theme.InputBackgroundBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Theme.InputBorderBrush" Color="#FFD1D5DB"/>
+    <SolidColorBrush x:Key="Theme.InputForegroundBrush" Color="#FF111827"/>
+
+    <SolidColorBrush x:Key="Theme.WarningSurfaceBrush" Color="#FFFFFBEB"/>
+    <SolidColorBrush x:Key="Theme.WarningBorderBrush" Color="#FFFBBF24"/>
+    <SolidColorBrush x:Key="Theme.WarningTextBrush" Color="#FF92400E"/>
+    <SolidColorBrush x:Key="Theme.DangerSurfaceBrush" Color="#FFFEF2F2"/>
+    <SolidColorBrush x:Key="Theme.DangerBorderBrush" Color="#FFFCA5A5"/>
+    <SolidColorBrush x:Key="Theme.DangerTextBrush" Color="#FF991B1B"/>
+    <SolidColorBrush x:Key="Theme.DangerStrongBrush" Color="#FFDC2626"/>
+    <SolidColorBrush x:Key="Theme.DangerStrongBorderBrush" Color="#FFB91C1C"/>
+
+    <SolidColorBrush x:Key="Theme.ScrollTrackBrush" Color="#1E0F172A"/>
+    <SolidColorBrush x:Key="Theme.ScrollTrackHoverBrush" Color="#280F172A"/>
+    <SolidColorBrush x:Key="Theme.ScrollTrackFocusBrush" Color="#320F172A"/>
+    <SolidColorBrush x:Key="Theme.ScrollThumbBrush" Color="#FF94A3B8"/>
+    <SolidColorBrush x:Key="Theme.ScrollThumbHoverBrush" Color="#FF7C8BA1"/>
+    <SolidColorBrush x:Key="Theme.ScrollThumbDraggingBrush" Color="#FF5A6A84"/>
+
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#FF111827"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#FF111827"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.GrayTextBrushKey}" Color="#FF9CA3AF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF4F46E5"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FFE0E7FF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF111827"/>
+</ResourceDictionary>

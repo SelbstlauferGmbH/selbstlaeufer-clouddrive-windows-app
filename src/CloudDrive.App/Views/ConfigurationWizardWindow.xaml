@@ -1,0 +1,311 @@
+<Window x:Class="CloudDrive.App.Views.ConfigurationWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:CloudDrive.App.Localization"
+        xmlns:local="clr-namespace:CloudDrive.App.Views"
+        Title="{Binding WindowTitle}"
+        Icon="pack://application:,,,/Resources/selbstlaeufer-cloud-app-icon-1024px.png"
+        Width="940"
+        Height="640"
+        MinWidth="940"
+        MinHeight="640"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:InverseBoolConverter x:Key="InverseBool"/>
+
+        <Style x:Key="StepCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Theme.SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Theme.BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="Padding" Value="16"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource Theme.SurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="308"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Background="{DynamicResource Theme.SurfaceAltBrush}"
+                    BorderBrush="{DynamicResource Theme.BorderBrush}"
+                    BorderThickness="0,0,1,0"
+                    Padding="28">
+                <StackPanel>
+                    <Border Width="60"
+                            Height="60"
+                            CornerRadius="20"
+                            Background="{DynamicResource Theme.AccentSurfaceBrush}">
+                        <TextBlock Text="CD"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource Theme.AccentTextBrush}"/>
+                    </Border>
+
+                    <TextBlock Text="{loc:Loc Wizard_Title}"
+                               Margin="0,18,0,0"
+                               FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+
+                    <TextBlock Text="{loc:Loc Wizard_Subtitle}"
+                               Margin="0,10,0,0"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+
+                    <Border Margin="0,28,0,0">
+                        <Border.Style>
+                            <Style BasedOn="{StaticResource StepCardStyle}" TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPreferencesStep}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource Theme.SelectionBrush}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Theme.SelectionBorderBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Width="30"
+                                    Height="30"
+                                    CornerRadius="10"
+                                    Background="{DynamicResource Theme.AccentSurfaceBrush}">
+                                <TextBlock Text="1"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource Theme.AccentTextBrush}"/>
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                <TextBlock Text="{loc:Loc Navigation_General_Title}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                                <TextBlock Text="{loc:Loc Section_General_Subtitle}"
+                                           Margin="0,6,0,0"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Margin="0,14,0,0">
+                        <Border.Style>
+                            <Style BasedOn="{StaticResource StepCardStyle}" TargetType="Border">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsAccountStep}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource Theme.SelectionBrush}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Theme.SelectionBorderBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Width="30"
+                                    Height="30"
+                                    CornerRadius="10"
+                                    Background="{DynamicResource Theme.AccentSurfaceBrush}">
+                                <TextBlock Text="2"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource Theme.AccentTextBrush}"/>
+                            </Border>
+
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                <TextBlock Text="{loc:Loc Navigation_Account_Title}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                                <TextBlock Text="{loc:Loc Section_Account_Subtitle}"
+                                           Margin="0,6,0,0"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <Grid Visibility="{Binding IsPreferencesStep, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="32">
+                            <TextBlock Text="{loc:Loc Navigation_General_Title}"
+                                       FontSize="28"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                            <TextBlock Text="{loc:Loc Section_General_Subtitle}"
+                                       Margin="0,8,0,0"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+
+                            <Border Margin="0,24,0,0"
+                                    Padding="22"
+                                    BorderBrush="{DynamicResource Theme.BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:Loc Common_Language}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                    <ComboBox Margin="0,8,0,0"
+                                              ItemsSource="{Binding LanguageOptions}"
+                                              DisplayMemberPath="Label"
+                                              SelectedValuePath="Value"
+                                              SelectedValue="{Binding Language}"/>
+
+                                    <TextBlock Text="{loc:Loc Common_Theme}"
+                                               Margin="0,18,0,0"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                    <ComboBox Margin="0,8,0,0"
+                                              ItemsSource="{Binding ThemeOptions}"
+                                              DisplayMemberPath="Label"
+                                              SelectedValuePath="Value"
+                                              SelectedValue="{Binding ThemeMode}"/>
+
+                                    <CheckBox Content="{loc:Loc Section_General_LaunchOnStartup}"
+                                              Margin="0,18,0,0"
+                                              IsChecked="{Binding LaunchOnStartup}"
+                                              FontSize="12"/>
+                                    <TextBlock Text="{loc:Loc Wizard_LaunchOnStartup_Hint}"
+                                               Margin="0,8,0,0"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+
+                                    <TextBlock Text="{loc:Loc Wizard_Appearance_Hint}"
+                                               Margin="0,14,0,0"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid Visibility="{Binding IsAccountStep, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="32">
+                            <TextBlock Text="{loc:Loc Navigation_Account_Title}"
+                                       FontSize="28"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                            <TextBlock Text="{loc:Loc Section_Account_Subtitle}"
+                                       Margin="0,8,0,0"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+
+                            <TextBlock Text="{loc:Loc Section_Account_WebDavUrl}"
+                                       Margin="0,24,0,6"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding WebDavUrl, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="12,8"/>
+
+                            <TextBlock Text="{loc:Loc Section_Account_Username}"
+                                       Margin="0,18,0,6"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                            <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="12,8"/>
+
+                            <TextBlock Text="{loc:Loc Section_Account_Password}"
+                                       Margin="0,18,0,6"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                            <PasswordBox x:Name="PasswordBox"
+                                         Padding="12,8"
+                                         PasswordChanged="PasswordBox_PasswordChanged"/>
+                            <TextBlock Text="{Binding PasswordHint}"
+                                       Margin="0,8,0,0"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                                <Button Content="{loc:Loc Section_Account_TestConnection}"
+                                        Padding="14,8"
+                                        Click="TestConnection_Click"
+                                        IsEnabled="{Binding IsTesting, Converter={StaticResource InverseBool}}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="1"
+                Background="{DynamicResource Theme.SurfaceAltBrush}"
+                BorderBrush="{DynamicResource Theme.BorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="18,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="{loc:Loc Common_Previous}"
+                            Padding="14,8"
+                            Margin="0,0,8,0"
+                            Click="BackButton_Click"
+                            IsEnabled="{Binding CanGoBack}"/>
+                    <Button Content="{loc:Loc Common_Close}"
+                            Padding="14,8"
+                            Margin="0,0,8,0"
+                            Click="CloseButton_Click"/>
+                    <Button Content="{Binding PrimaryActionText}"
+                            Padding="16,8"
+                            Click="PrimaryButton_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

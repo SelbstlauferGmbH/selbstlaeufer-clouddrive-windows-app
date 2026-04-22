@@ -1,0 +1,84 @@
+<Project>
+
+  <!-- MSBuild inline task: generates integrity-manifest.json with SHA256 hashes
+       for all DLL/EXE files in the build output directory.
+       Uses RoslynCodeTaskFactory so it works cross-platform with dotnet build. -->
+
+  <UsingTask TaskName="GenerateIntegrityManifest"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <OutputDir ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Using Namespace="System.Text" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+// Resolve to absolute path
+var outputDir = Path.GetFullPath(OutputDir);
+var manifestPath = Path.Combine(outputDir, "integrity-manifest.json");
+
+// Find all DLL and EXE files recursively
+var extensions = new[] { ".dll", ".exe" };
+var files = Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories)
+    .Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+    .Where(f => !f.Equals(manifestPath, StringComparison.OrdinalIgnoreCase))
+    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+    .ToList();
+
+// Build JSON manually to avoid System.Text.Json dependency in the task
+var sb = new StringBuilder();
+sb.AppendLine("{");
+sb.AppendLine($"  \"generatedAt\": \"{DateTime.UtcNow:O}\",");
+sb.AppendLine("  \"algorithm\": \"SHA256\",");
+sb.AppendLine("  \"files\": [");
+
+using (var sha = SHA256.Create())
+{
+    for (int i = 0; i < files.Count; i++)
+    {
+        var filePath = files[i];
+        var relativePath = filePath
+            .Substring(outputDir.Length)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Replace('\\', '/');
+
+        byte[] hashBytes;
+        using (var stream = File.OpenRead(filePath))
+        {
+            hashBytes = sha.ComputeHash(stream);
+        }
+
+        var hashHex = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+        var comma = (i < files.Count - 1) ? "," : "";
+
+        // Escape backslashes in path for JSON (already using forward slashes, but be safe)
+        var jsonPath = relativePath.Replace("\\", "/");
+
+        sb.AppendLine($"    {{ \"path\": \"{jsonPath}\", \"hash\": \"{hashHex}\" }}{comma}");
+    }
+}
+
+sb.AppendLine("  ]");
+sb.AppendLine("}");
+
+File.WriteAllText(manifestPath, sb.ToString(), Encoding.UTF8);
+Log.LogMessage(MessageImportance.High,
+    $"IntegrityManifest: wrote {files.Count} file hashes to {manifestPath}");
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="_GenerateIntegrityManifest" AfterTargets="Build">
+    <GenerateIntegrityManifest OutputDir="$(OutputPath)" />
+  </Target>
+
+  <Target Name="_GeneratePublishIntegrityManifest" AfterTargets="Publish">
+    <GenerateIntegrityManifest OutputDir="$(PublishDir)" />
+  </Target>
+
+</Project>

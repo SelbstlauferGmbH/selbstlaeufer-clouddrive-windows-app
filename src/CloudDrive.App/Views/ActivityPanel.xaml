@@ -1,0 +1,474 @@
+<Window x:Class="CloudDrive.App.Views.ActivityPanel"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:CloudDrive.App.Localization"
+        xmlns:vm="clr-namespace:CloudDrive.App.ViewModels"
+        Width="416"
+        Height="660"
+        MinWidth="400"
+        MinHeight="380"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="Transparent"
+        AllowsTransparency="True"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ShowActivated="True"
+        WindowStartupLocation="Manual"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.TextSecondaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource Theme.HoverBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Theme.TextPrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource Theme.SurfaceInsetBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FooterButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="10,12"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinHeight" Value="88"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="12" Padding="{TemplateBinding Padding}">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Border Width="32" Height="32" CornerRadius="10" Background="{DynamicResource Theme.AccentSurfaceBrush}" HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding Glyph}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Theme.AccentTextBrush}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"/>
+                                </Border>
+                                <TextBlock Text="{Binding Label}"
+                                           Margin="0,10,0,0"
+                                           FontSize="11"
+                                           FontWeight="Medium"
+                                           Foreground="{DynamicResource Theme.TextSecondaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource Theme.HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource Theme.SurfaceInsetBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="PanelRoot"
+            Background="{DynamicResource Theme.SurfaceBrush}"
+            BorderBrush="{DynamicResource Theme.BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            SnapsToDevicePixels="True"
+            KeyboardNavigation.TabNavigation="Cycle">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="10" Opacity="0.24" Color="{DynamicResource Theme.ShadowColor}"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Padding="16,12" BorderBrush="{DynamicResource Theme.BorderBrush}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource Theme.AccentSurfaceBrush}">
+                            <TextBlock Text="CD"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Theme.AccentTextBrush}"
+                                       FontSize="10"
+                                       FontWeight="Bold"/>
+                        </Border>
+                        <StackPanel Margin="10,0,0,0">
+                            <TextBlock Text="{Binding HeaderTitle}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding HeaderSubtitle}" FontSize="11" Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Click="SettingsButton_Click" ToolTip="{loc:Loc ActivityPanel_Tooltip_Settings}">
+                        <TextBlock Text="⚙"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Theme.TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="CloseButton_Click" ToolTip="{loc:Loc Common_Close}">
+                        <TextBlock Text="✕"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Theme.TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding StatusBanners}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:DashboardStatusBanner}">
+                        <Border Margin="12,10,12,0"
+                                CornerRadius="12"
+                                Background="{Binding Background}"
+                                BorderBrush="{Binding BorderBrush}"
+                                BorderThickness="1"
+                                Tag="{Binding}"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="StatusBanner_Click">
+                            <Grid Margin="12,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Width="24" Height="24" CornerRadius="8" Background="{DynamicResource Theme.SurfaceBrush}" VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding IconText}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontWeight="Bold"
+                                               Foreground="{Binding Foreground}"/>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" Margin="10,0,12,0">
+                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" Foreground="{Binding Foreground}"/>
+                                    <TextBlock Text="{Binding Description}"
+                                               TextWrapping="Wrap"
+                                               FontSize="11"
+                                               Margin="0,4,0,0"
+                                               Foreground="{Binding Foreground}"/>
+                                </StackPanel>
+
+                                <Button Grid.Column="2"
+                                        Tag="{Binding}"
+                                        Click="StatusBannerAction_Click"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Content="{Binding ActionLabel}"
+                                        FontSize="11"
+                                        FontWeight="SemiBold"
+                                        Foreground="{Binding Foreground}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Grid.Row="2" Margin="12,10,12,0" Padding="12" Background="{DynamicResource Theme.SurfaceAltBrush}" BorderBrush="{DynamicResource Theme.BorderBrush}" BorderThickness="1" CornerRadius="16">
+                <ItemsControl ItemsSource="{Binding Metrics}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" Columns="4"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:DashboardMetricCard}">
+                            <Button Tag="{Binding}"
+                                    Click="MetricCard_Click"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="10,6"
+                                    Cursor="Hand">
+                                <Border CornerRadius="12" Background="Transparent" Padding="6">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="8" Height="8" Fill="{Binding AccentBrush}" Margin="0,3,6,0"/>
+                                            <TextBlock Text="{Binding Label}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Value}"
+                                                   Margin="0,8,0,0"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                                        <TextBlock Text="{Binding Subtext}"
+                                                   Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <Grid Grid.Row="3" Margin="0,10,0,0">
+                <ScrollViewer x:Name="ActivityScrollViewer"
+                              VerticalScrollBarVisibility="Auto"
+                              ScrollChanged="ActivityScrollViewer_ScrollChanged"
+                              Visibility="{Binding HasAnyContent, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <StackPanel Margin="16,0,16,10"
+                                    Visibility="{Binding HasProblems, Converter={StaticResource BoolToVisibility}}">
+                            <DockPanel Margin="0,0,0,10">
+                                <TextBlock Text="{loc:Loc ActivityPanel_NeedsAttention}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                <Button Content="{loc:Loc ActivityPanel_OpenProblemCenter}"
+                                        DockPanel.Dock="Right"
+                                        Padding="0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Foreground="{DynamicResource Theme.LinkBrush}"
+                                        FontSize="11"
+                                        FontWeight="SemiBold"
+                                        Visibility="{Binding ShowViewAllProblems, Converter={StaticResource BoolToVisibility}}"
+                                        Click="ViewAllProblems_Click"/>
+                            </DockPanel>
+
+                            <ItemsControl ItemsSource="{Binding ProblemItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ProblemDisplayItem}">
+                                        <Border Background="{Binding BackgroundBrush}"
+                                                BorderBrush="{Binding BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="14"
+                                                Padding="12"
+                                                Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <StackPanel DockPanel.Dock="Left">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse Width="10" Height="10" Fill="{Binding AccentBrush}" Margin="0,4,8,0"/>
+                                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding KindLabel}" Margin="18,6,0,0" FontSize="10" FontWeight="SemiBold" Foreground="{Binding ForegroundBrush}"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding RelativeTime}" DockPanel.Dock="Right" FontSize="10" Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                                </DockPanel>
+
+                                                <TextBlock Text="{Binding Summary}" Margin="0,10,0,0" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Theme.TextPrimaryBrush}"/>
+                                                <TextBlock Text="{Binding Detail}" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="10" Foreground="{DynamicResource Theme.TextSecondaryBrush}" Visibility="{Binding HasDetail, Converter={StaticResource BoolToVisibility}}"/>
+
+                                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                                    <TextBlock Text="{loc:Loc Common_Location}" FontSize="10" Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                                    <Button Content="{Binding LocationDisplay}"
+                                                            Tag="{Binding}"
+                                                            Click="ProblemLocationLink_Click"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Padding="4,0,0,0"
+                                                            Foreground="{DynamicResource Theme.LinkBrush}"
+                                                            Cursor="Hand"
+                                                            FontSize="10"
+                                                            HorizontalAlignment="Left"
+                                                            Visibility="{Binding HasLocationLink, Converter={StaticResource BoolToVisibility}}"/>
+                                                </StackPanel>
+
+                                                <WrapPanel Margin="0,10,0,0">
+                                                    <Button Content="{Binding PrimaryAction.Label}"
+                                                            Tag="{Binding PrimaryAction}"
+                                                            Click="ProblemAction_Click"
+                                                            Padding="10,5"
+                                                            Margin="0,0,8,8"
+                                                            Visibility="{Binding HasPrimaryAction, Converter={StaticResource BoolToVisibility}}"/>
+                                                    <Button Content="{Binding SecondaryAction.Label}"
+                                                            Tag="{Binding SecondaryAction}"
+                                                            Click="ProblemAction_Click"
+                                                            Padding="10,5"
+                                                            Margin="0,0,8,8"
+                                                            Visibility="{Binding HasSecondaryAction, Converter={StaticResource BoolToVisibility}}"/>
+                                                    <Button Content="{Binding DismissAction.Label}"
+                                                            Tag="{Binding DismissAction}"
+                                                            Click="ProblemAction_Click"
+                                                            Padding="0"
+                                                            Margin="0,5,8,8"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Foreground="{DynamicResource Theme.LinkBrush}"
+                                                            FontSize="10"
+                                                            FontWeight="SemiBold"
+                                                            Visibility="{Binding HasDismissAction, Converter={StaticResource BoolToVisibility}}"/>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Button Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalAlignment="Left"
+                                    Foreground="{DynamicResource Theme.LinkBrush}"
+                                    FontSize="11"
+                                    FontWeight="SemiBold"
+                                    Click="ViewAllProblems_Click"
+                                    Content="{loc:Loc ActivityPanel_OpenProblemCenter}"/>
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding ActivityGroups}"
+                                      Visibility="{Binding HasActivity, Converter={StaticResource BoolToVisibility}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ActivityDayGroup}">
+                                    <StackPanel>
+                                        <Border Background="{DynamicResource Theme.SurfaceBrush}" BorderBrush="{DynamicResource Theme.BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="16,8">
+                                            <TextBlock Text="{Binding Label}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                        </Border>
+
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:ActivityDisplayItem}">
+                                                    <Border BorderBrush="{DynamicResource Theme.BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="16,12" MouseLeftButtonUp="ActivityItem_MouseLeftButtonUp">
+                                                        <Grid Cursor="Hand">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <Border Width="40" Height="40" CornerRadius="12" Background="{Binding BadgeBackground}" VerticalAlignment="Top">
+                                                                <TextBlock Text="{Binding BadgeText}"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           FontSize="10"
+                                                                           FontWeight="Bold"
+                                                                           Foreground="{Binding BadgeForeground}"/>
+                                                            </Border>
+
+                                                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                                                <TextBlock Text="{Binding Title}"
+                                                                           FontSize="13"
+                                                                           FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource Theme.TextPrimaryBrush}"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                    <TextBlock Text="{Binding SubtitlePrefix}" FontSize="11" Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                                                    <Button Content="{Binding LocationDisplay}"
+                                                                            Visibility="{Binding HasLocationLink, Converter={StaticResource BoolToVisibility}}"
+                                                                            Tag="{Binding}"
+                                                                            Click="LocationLink_Click"
+                                                                            Background="Transparent"
+                                                                            BorderThickness="0"
+                                                                            Padding="4,0,0,0"
+                                                                            Foreground="{DynamicResource Theme.LinkBrush}"
+                                                                            Cursor="Hand"
+                                                                            FontSize="11"
+                                                                            HorizontalAlignment="Left"/>
+                                                                    <TextBlock Text="{Binding Subtitle}"
+                                                                               Visibility="{Binding HasSubtitleOnly, Converter={StaticResource BoolToVisibility}}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource Theme.TextSecondaryBrush}"/>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding RelativeTime}" Margin="0,4,0,0" FontSize="11" Foreground="{DynamicResource Theme.TextMutedBrush}"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Margin="16,10,16,0"
+                                Padding="0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                HorizontalAlignment="Left"
+                                Foreground="{DynamicResource Theme.LinkBrush}"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                Visibility="{Binding ShowViewAllActivity, Converter={StaticResource BoolToVisibility}}"
+                                Click="ViewAllActivity_Click"
+                                Content="{loc:Loc ActivityPanel_ViewAllActivity}"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel Visibility="{Binding HasNoContent, Converter={StaticResource BoolToVisibility}}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource Theme.AccentSurfaceBrush}" HorizontalAlignment="Center">
+                        <TextBlock Text="ACT"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource Theme.AccentTextBrush}"/>
+                    </Border>
+                    <TextBlock Text="{loc:Loc ActivityPanel_EmptyTitle}"
+                               Margin="0,14,0,0"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Theme.TextSecondaryBrush}"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="{loc:Loc ActivityPanel_EmptyDescription}"
+                               Margin="0,6,0,0"
+                               FontSize="11"
+                               Foreground="{DynamicResource Theme.TextMutedBrush}"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+
+            <Border Grid.Row="4" BorderBrush="{DynamicResource Theme.BorderBrush}" BorderThickness="0,1,0,0" Padding="12,12,12,18" MinHeight="108">
+                <ItemsControl ItemsSource="{Binding QuickActions}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" Columns="4"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Tag="{Binding}" Click="QuickAction_Click" Style="{StaticResource FooterButtonStyle}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
