@@ -91,7 +91,7 @@ public class RemoteChangeDetector
                 // Check if remote changed (ETag differs)
                 if (!string.IsNullOrEmpty(remoteItem.ETag)
                     && !string.IsNullOrEmpty(localItem.RemoteETag)
-                    && remoteItem.ETag != localItem.RemoteETag)
+                    && !WebDavETag.Equals(remoteItem.ETag, localItem.RemoteETag))
                 {
                     _logger.LogInformation("Remote file changed: {Path}", remoteItem.RemotePath);
                     localItem.RemoteETag = remoteItem.ETag;

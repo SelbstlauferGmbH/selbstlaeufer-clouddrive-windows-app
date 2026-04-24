@@ -121,7 +121,7 @@ public class ConflictResolver
         if (!string.IsNullOrWhiteSpace(existingItem.RemoteETag) &&
             !string.IsNullOrWhiteSpace(remoteItem.ETag))
         {
-            return !string.Equals(existingItem.RemoteETag, remoteItem.ETag, StringComparison.Ordinal);
+            return !WebDavETag.Equals(existingItem.RemoteETag, remoteItem.ETag);
         }
 
         if (existingItem.RemoteLastModified.HasValue &&

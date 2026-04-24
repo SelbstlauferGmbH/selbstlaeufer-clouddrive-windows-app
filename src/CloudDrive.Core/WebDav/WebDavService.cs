@@ -226,7 +226,7 @@ public class WebDavService : IWebDavService, IDisposable
         {
             response.EnsureSuccessStatusCode();
             activityScope?.CompleteWithStatus(ActivityStatus.Success);
-            return response.Headers.ETag?.Tag;
+            return WebDavETag.Normalize(response.Headers.ETag?.Tag);
         }
         catch (Exception ex)
         {
@@ -578,10 +578,6 @@ public class WebDavService : IWebDavService, IDisposable
             if (!itemPath.StartsWith('/'))
                 itemPath = "/" + itemPath;
 
-            var etagValue = etag?.Trim('"');
-            if (string.IsNullOrWhiteSpace(etagValue))
-                etagValue = null;
-
             items.Add(new RemoteItem
             {
                 Name = name,
@@ -589,7 +585,7 @@ public class WebDavService : IWebDavService, IDisposable
                 IsDirectory = isDir,
                 Size = long.TryParse(sizeStr, out var size) ? size : 0,
                 LastModified = DateTime.TryParse(lastModStr, out var lastMod) ? lastMod : DateTime.MinValue,
-                ETag = etagValue,
+                ETag = WebDavETag.Normalize(etag),
                 ContentType = contentType
             });
         }

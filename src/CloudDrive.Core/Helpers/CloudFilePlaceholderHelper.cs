@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Vanara.PInvoke;
 using static Vanara.PInvoke.CldApi;
@@ -147,6 +149,74 @@ public static class CloudFilePlaceholderHelper
         catch (Exception ex)
         {
             logger?.LogWarning(ex, "Failed to mark placeholder in-sync: {Path}", path);
+            return false;
+        }
+    }
+
+    public static bool TryConvertToPlaceholder(string path, string? remotePath, ILogger? logger = null)
+    {
+        try
+        {
+            if (!File.Exists(path) && !Directory.Exists(path))
+                return false;
+
+            if (TryGetPlaceholderState(path, out _))
+                return true;
+
+            var isDirectory = Directory.Exists(path);
+            using var handle = OpenHandle(
+                path,
+                Kernel32.FileAccess.FILE_WRITE_DATA,
+                isDirectory);
+
+            if (handle.IsInvalid)
+            {
+                logger?.LogWarning("Cannot open file to convert to placeholder: {Path}", path);
+                return false;
+            }
+
+            byte[]? fileIdentity = null;
+            GCHandle fileIdentityHandle = default;
+            var fileIdentityPtr = IntPtr.Zero;
+            uint fileIdentityLength = 0;
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(remotePath))
+                {
+                    fileIdentity = Encoding.UTF8.GetBytes(remotePath);
+                    fileIdentityHandle = GCHandle.Alloc(fileIdentity, GCHandleType.Pinned);
+                    fileIdentityPtr = fileIdentityHandle.AddrOfPinnedObject();
+                    fileIdentityLength = (uint)fileIdentity.Length;
+                }
+
+                long convertUsn = 0;
+                var hr = CfConvertToPlaceholder(
+                    handle,
+                    fileIdentityPtr,
+                    fileIdentityLength,
+                    CF_CONVERT_FLAGS.CF_CONVERT_FLAG_MARK_IN_SYNC,
+                    out convertUsn,
+                    IntPtr.Zero);
+
+                if (hr.Failed)
+                {
+                    logger?.LogWarning("CfConvertToPlaceholder failed for {Path}: {Hr}", path, hr);
+                    return false;
+                }
+
+                logger?.LogInformation("Converted file to in-sync placeholder: {Path}", path);
+                return true;
+            }
+            finally
+            {
+                if (fileIdentityHandle.IsAllocated)
+                    fileIdentityHandle.Free();
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed to convert file to placeholder: {Path}", path);
             return false;
         }
     }
