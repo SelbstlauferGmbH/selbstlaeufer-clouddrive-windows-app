@@ -18,18 +18,30 @@ catch
 
 AppLocalizer.Instance.Initialize(settings.Language);
 
+var logDir = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "CloudDrive", "logs");
+
 var loggerConfiguration = new LoggerConfiguration().MinimumLevel.Information();
+
 if (settings.EnableFileLogging)
 {
-    var logDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "CloudDrive",
-        "logs");
     Directory.CreateDirectory(logDir);
     loggerConfiguration = loggerConfiguration.WriteTo.File(
         Path.Combine(logDir, "watchdog-.log"),
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7);
+}
+
+// When CLOUDDRIVE_DEBUG_JSONLOG=1, write a JSON Lines file alongside the app debug log.
+if (Environment.GetEnvironmentVariable("CLOUDDRIVE_DEBUG_JSONLOG") == "1")
+{
+    Directory.CreateDirectory(logDir);
+    loggerConfiguration = loggerConfiguration.WriteTo.File(
+        new Serilog.Formatting.Json.JsonFormatter(),
+        Path.Combine(logDir, "debug-watchdog-.jsonl"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 3);
 }
 
 Log.Logger = loggerConfiguration.CreateLogger();

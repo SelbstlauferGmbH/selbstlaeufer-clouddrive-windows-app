@@ -124,6 +124,20 @@ public partial class App : System.Windows.Application
                 fileSizeLimitBytes: 10 * 1024 * 1024);
         }
 
+        // When CLOUDDRIVE_DEBUG_JSONLOG=1, also write a JSON Lines file that
+        // stop-local.ps1 (or run-e2e-local.ps1) can merge with WebDAV server logs.
+        if (Environment.GetEnvironmentVariable("CLOUDDRIVE_DEBUG_JSONLOG") == "1")
+        {
+            var jsonLogDir = Path.Combine(AppSettings.GetDataDirectory(), "logs");
+            Directory.CreateDirectory(jsonLogDir);
+            logConfig = logConfig.WriteTo.File(
+                new Serilog.Formatting.Json.JsonFormatter(),
+                Path.Combine(jsonLogDir, "debug-.jsonl"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 3,
+                fileSizeLimitBytes: 50 * 1024 * 1024);
+        }
+
         Log.Logger = logConfig.CreateLogger();
 
         if (settings.EnableFileLogging)

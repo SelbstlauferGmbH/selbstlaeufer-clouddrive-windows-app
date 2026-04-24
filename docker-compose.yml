@@ -1,0 +1,41 @@
+# CloudDrive E2E test infrastructure
+#
+# Provides a local WebDAV server with structured JSON request logging.
+# The tests run on Windows (cfapi requires Windows 11); this container
+# supplies the WebDAV backend they connect to via localhost:8080.
+#
+# Usage:
+#   docker compose up -d           # start server
+#   docker compose down -v         # stop + remove volume
+#   docker compose logs -f webdav  # stream server logs live
+#
+# Or use the automated runner:
+#   tests/run-e2e-local.ps1
+
+services:
+  webdav:
+    build:
+      context: tests/docker/wsgidav
+      dockerfile: Dockerfile
+    container_name: clouddrive-webdav-test
+    ports:
+      - "8080:8080"
+    volumes:
+      - webdav-data:/data/dav
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',8080)); s.close()\""
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 3s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  webdav-data:
+    driver: local

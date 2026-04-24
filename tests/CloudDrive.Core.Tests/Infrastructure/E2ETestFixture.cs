@@ -19,6 +19,8 @@ public class E2ETestFixture : IAsyncLifetime
     public SyncCoordinator Coordinator { get; private set; } = null!;
     public AppSettings Settings { get; private set; } = null!;
     public IWebDavService WebDav { get; private set; } = null!;
+    public TestSessionLogger SessionLogger { get; private set; } = new();
+    private JsonFileLogSink _fileLogSink = null!;
 
     /// <summary>Shortcut to the coordinator's internal DB (shared instance).</summary>
     public SyncStateDb Db => Coordinator.Db;
@@ -43,6 +45,7 @@ public class E2ETestFixture : IAsyncLifetime
     {
         // 0. Load .env file (repository root) into environment variables
         DotEnvLoader.Load();
+        SessionLogger = new TestSessionLogger();
 
         // 1. Create isolated temp directory
         TestDataDir = Path.Combine(Path.GetTempPath(), $"clouddrive-e2e-{Guid.NewGuid():N}");
@@ -63,11 +66,15 @@ public class E2ETestFixture : IAsyncLifetime
             DataDirectory = TestDataDir // ensures SyncCoordinator creates DB here
         };
 
-        // 3. Create coordinator with in-memory log sink
+        // 3. Create coordinator with in-memory log sink + real-time JSON file sink
         LogSink = new InMemoryLogSink();
+        // Stream log path mirrors the session log path so stop-local.ps1 finds it
+        var streamLogPath = SessionLogger.OutputPath.Replace(".jsonl", "-stream.jsonl");
+        _fileLogSink = new JsonFileLogSink(streamLogPath);
         var loggerFactory = LoggerFactory.Create(b =>
         {
             b.AddProvider(LogSink);
+            b.AddProvider(_fileLogSink);
             b.SetMinimumLevel(LogLevel.Debug);
         });
 
@@ -117,6 +124,10 @@ public class E2ETestFixture : IAsyncLifetime
 
         // 4. Clean up local temp directory
         try { Directory.Delete(TestDataDir, recursive: true); } catch { /* best effort */ }
+
+        // 5. Write final session log and close streaming sink
+        try { SessionLogger.Flush(LogSink); } catch { /* best effort */ }
+        try { _fileLogSink.Dispose(); } catch { /* best effort */ }
 
         LogSink.Dispose();
     }
