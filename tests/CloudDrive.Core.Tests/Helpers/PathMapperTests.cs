@@ -45,6 +45,26 @@ public class PathMapperTests
     }
 
     [Fact]
+    public void ToRemotePath_Root_ReturnsBasePathWithoutDotSegment()
+    {
+        var mapper = new PathMapper("C:\\CloudDrive", "/instance_399");
+
+        var result = mapper.ToRemotePath("C:\\CloudDrive");
+
+        Assert.Equal("/instance_399", result);
+    }
+
+    [Fact]
+    public void ToRemotePath_RootWithSlashBase_ReturnsSlash()
+    {
+        var mapper = new PathMapper("C:\\CloudDrive", "/");
+
+        var result = mapper.ToRemotePath("C:\\CloudDrive");
+
+        Assert.Equal("/", result);
+    }
+
+    [Fact]
     public void ToRemotePath_LocalPath_ReturnsCorrectPath()
     {
         // Arrange

@@ -14,6 +14,7 @@ public class UploadManager
     private readonly ISyncProjectionService _projectionService;
     private readonly ConflictResolver? _conflictResolver;
     private readonly ISyncProblemService? _problemService;
+    private readonly SyncJournal? _journal;
     private readonly ILogger<UploadManager> _logger;
     private readonly SemaphoreSlim _semaphore;
 
@@ -25,7 +26,8 @@ public class UploadManager
         int maxConcurrentTransfers,
         ILogger<UploadManager> logger,
         ConflictResolver? conflictResolver = null,
-        ISyncProblemService? problemService = null)
+        ISyncProblemService? problemService = null,
+        SyncJournal? journal = null)
     {
         _webDav = webDav;
         _stateService = stateService;
@@ -33,6 +35,7 @@ public class UploadManager
         _projectionService = projectionService;
         _conflictResolver = conflictResolver;
         _problemService = problemService;
+        _journal = journal;
         _logger = logger;
         _semaphore = new SemaphoreSlim(maxConcurrentTransfers);
     }
@@ -94,6 +97,8 @@ public class UploadManager
                 SyncStatus = SyncStatus.Synced,
                 LastSynced = DateTime.UtcNow
             });
+            UpsertJournal(localPath, remotePath, isDirectory: true, size: 0, etag: null, checksum: null);
+            _projectionService.ScheduleMarkInSync(localPath);
             return;
         }
 
@@ -135,6 +140,7 @@ public class UploadManager
         });
 
         _projectionService.ScheduleMarkInSync(localPath);
+        UpsertJournal(localPath, remotePath, isDirectory: false, size: fileInfo.Length, etag, hash, fileInfo.LastWriteTimeUtc);
         _problemService?.ResolveByDedupeKey(SyncProblemKeys.Upload(localPath));
 
         _logger.LogInformation("UPLOAD_FILE complete: {Path} Synced", remotePath);
@@ -159,6 +165,7 @@ public class UploadManager
         if (item.IsDirectory)
             _stateService.DeleteChildren(localPath);
         _stateService.Delete(localPath);
+        DeleteJournalForItem(item);
     }
 
     private async Task HandleRenameAsync(string newPath, string oldPath, CancellationToken ct)
@@ -190,6 +197,14 @@ public class UploadManager
                     SyncStatus = SyncStatus.Synced,
                     LastSynced = DateTime.UtcNow
                 });
+                UpsertJournal(
+                    newPath,
+                    newRemotePath,
+                    remoteItem.IsDirectory,
+                    remoteItem.Size,
+                    remoteItem.ETag,
+                    checksum: null,
+                    mtimeUtc: remoteItem.LastModified);
                 RefreshPlaceholderIdentity(newPath, newRemotePath, remoteItem.IsDirectory, remoteItem.Size, remoteItem.LastModified);
                 _projectionService.ScheduleMarkInSync(newPath);
                 return;
@@ -210,9 +225,72 @@ public class UploadManager
         item.SyncStatus = SyncStatus.Synced;
         item.LastSynced = DateTime.UtcNow;
         _stateService.Upsert(item);
+        RenameJournal(oldPath, newPath, item);
         RefreshPlaceholderIdentity(newPath, newRemotePath, item.IsDirectory, item.FileSize, item.RemoteLastModified);
         _projectionService.ScheduleMarkInSync(newPath);
         _problemService?.ResolveByDedupeKey(SyncProblemKeys.Upload(newPath));
+    }
+
+    private void UpsertJournal(
+        string localPath,
+        string remotePath,
+        bool isDirectory,
+        long size,
+        string? etag,
+        string? checksum,
+        DateTime? mtimeUtc = null)
+    {
+        if (_journal == null)
+            return;
+
+        var existing = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        _journal.Upsert(new SyncJournalRecord
+        {
+            FileId = existing?.FileId ?? SyncIdentity.NewLocalId(),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = isDirectory,
+            Size = size,
+            ETag = etag,
+            BaseETag = etag,
+            Checksum = checksum,
+            MTimeUtc = mtimeUtc?.ToUniversalTime() ?? DateTime.UtcNow,
+            InSync = true
+        });
+    }
+
+    private void RenameJournal(string oldPath, string newPath, SyncItem item)
+    {
+        if (_journal == null)
+            return;
+
+        var existing = _journal.GetByLocalPath(oldPath)
+            ?? _journal.GetByRemotePath(item.RemotePath)
+            ?? _journal.GetByLocalPath(newPath);
+
+        _journal.Upsert(new SyncJournalRecord
+        {
+            FileId = existing?.FileId ?? SyncIdentity.NewLocalId(),
+            LocalPath = newPath,
+            RemotePath = item.RemotePath,
+            IsDirectory = item.IsDirectory,
+            Size = item.FileSize,
+            ETag = item.RemoteETag,
+            BaseETag = item.RemoteETag,
+            Checksum = item.LocalHash,
+            MTimeUtc = item.RemoteLastModified?.ToUniversalTime() ?? DateTime.UtcNow,
+            InSync = true
+        });
+    }
+
+    private void DeleteJournalForItem(SyncItem item)
+    {
+        if (_journal == null)
+            return;
+
+        var record = _journal.GetByLocalPath(item.LocalPath) ?? _journal.GetByRemotePath(item.RemotePath);
+        if (record != null)
+            _journal.Delete(record.FileId);
     }
 
     private void RefreshPlaceholderIdentity(

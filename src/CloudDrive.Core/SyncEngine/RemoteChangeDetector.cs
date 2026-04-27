@@ -17,6 +17,7 @@ public class RemoteChangeDetector
     private readonly ILogger<RemoteChangeDetector> _logger;
     private readonly ActiveCloudRequestTracker? _requestTracker;
     private readonly bool _verboseDebugLogging;
+    private readonly SyncJournal? _journal;
 
     public RemoteChangeDetector(
         IWebDavService webDav,
@@ -25,7 +26,8 @@ public class RemoteChangeDetector
         ISyncProjectionService projectionService,
         ILogger<RemoteChangeDetector> logger,
         ActiveCloudRequestTracker? requestTracker = null,
-        bool verboseDebugLogging = false)
+        bool verboseDebugLogging = false,
+        SyncJournal? journal = null)
     {
         _webDav = webDav;
         _stateService = stateService;
@@ -34,6 +36,7 @@ public class RemoteChangeDetector
         _logger = logger;
         _requestTracker = requestTracker;
         _verboseDebugLogging = verboseDebugLogging;
+        _journal = journal;
     }
 
     public async Task ScanAsync(CancellationToken ct)
@@ -98,6 +101,7 @@ public class RemoteChangeDetector
                     localItem.RemoteLastModified = remoteItem.LastModified;
                     localItem.FileSize = remoteItem.Size;
                     localItem.SyncStatus = SyncStatus.CloudOnly;
+                    UpsertJournal(localItem, remoteItem);
 
                     // Update placeholder metadata in Explorer so the user sees correct size/date
                     if (!localItem.IsDirectory)
@@ -118,6 +122,7 @@ public class RemoteChangeDetector
                     localItem.FileSize = remoteItem.Size;
                     localItem.SyncStatus = SyncStatus.CloudOnly;
                     _stateService.Upsert(localItem);
+                    UpsertJournal(localItem, remoteItem);
                     if (!File.Exists(localItem.LocalPath) && !Directory.Exists(localItem.LocalPath))
                     {
                         _projectionService.CreateRemotePlaceholders(localDirPath, [remoteItem]);
@@ -127,6 +132,7 @@ public class RemoteChangeDetector
                 else if (remotePathChanged)
                 {
                     _stateService.Upsert(localItem);
+                    UpsertJournal(localItem, remoteItem);
                 }
             }
             else
@@ -137,6 +143,7 @@ public class RemoteChangeDetector
                 if (Directory.Exists(localDirPath))
                 {
                     _projectionService.CreateRemotePlaceholders(localDirPath, [remoteItem]);
+                    UpsertJournalForRemote(remoteItem);
                     shouldRefreshExplorer = true;
                 }
             }
@@ -172,12 +179,14 @@ public class RemoteChangeDetector
                     localItem.RemoteETag = revalidatedItem.ETag;
                     localItem.RemoteLastModified = revalidatedItem.LastModified;
                     _stateService.Upsert(localItem);
+                    UpsertJournal(localItem, revalidatedItem);
                     continue;
                 }
 
                 LogActiveRequestsForPath(localItem.LocalPath, localItem.RemotePath);
                 _logger.LogInformation("Remote item deleted: {Path}", localItem.RemotePath);
                 _stateService.MarkRemoteDeletionPending(localItem);
+                MarkJournalRemoteDeletionPending(localItem);
 
                 _projectionService.ScheduleRemoteDeletion(localItem.LocalPath, localItem.IsDirectory, localDirPath);
                 shouldRefreshExplorer = true;
@@ -198,6 +207,64 @@ public class RemoteChangeDetector
             localChildren.Count,
             shouldRefreshExplorer,
             directoryStopwatch.ElapsedMilliseconds);
+    }
+
+    private void UpsertJournal(SyncItem localItem, RemoteItem remoteItem)
+    {
+        if (_journal == null)
+            return;
+
+        var existing = _journal.GetByLocalPath(localItem.LocalPath)
+            ?? _journal.GetByRemotePath(remoteItem.RemotePath)
+            ?? _journal.GetByRemotePath(localItem.RemotePath);
+
+        _journal.Upsert(new SyncJournalRecord
+        {
+            FileId = existing?.FileId ?? SyncIdentity.RemotePathFallbackId(remoteItem.RemotePath),
+            LocalPath = localItem.LocalPath,
+            RemotePath = remoteItem.RemotePath,
+            IsDirectory = remoteItem.IsDirectory,
+            Size = remoteItem.Size,
+            ETag = remoteItem.ETag,
+            BaseETag = remoteItem.ETag,
+            MTimeUtc = remoteItem.LastModified == DateTime.MinValue ? DateTime.UtcNow : remoteItem.LastModified.ToUniversalTime(),
+            InSync = localItem.SyncStatus == SyncStatus.Synced || localItem.SyncStatus == SyncStatus.CloudOnly
+        });
+    }
+
+    private void UpsertJournalForRemote(RemoteItem remoteItem)
+    {
+        if (_journal == null)
+            return;
+
+        var localPath = _pathMapper.ToLocalPath(remoteItem.RemotePath);
+        var existing = _journal.GetByRemotePath(remoteItem.RemotePath) ?? _journal.GetByLocalPath(localPath);
+        _journal.Upsert(new SyncJournalRecord
+        {
+            FileId = existing?.FileId ?? SyncIdentity.RemotePathFallbackId(remoteItem.RemotePath),
+            LocalPath = localPath,
+            RemotePath = remoteItem.RemotePath,
+            IsDirectory = remoteItem.IsDirectory,
+            Size = remoteItem.Size,
+            ETag = remoteItem.ETag,
+            BaseETag = remoteItem.ETag,
+            MTimeUtc = remoteItem.LastModified == DateTime.MinValue ? DateTime.UtcNow : remoteItem.LastModified.ToUniversalTime(),
+            InSync = true
+        });
+    }
+
+    private void MarkJournalRemoteDeletionPending(SyncItem item)
+    {
+        if (_journal == null)
+            return;
+
+        var record = _journal.GetByLocalPath(item.LocalPath) ?? _journal.GetByRemotePath(item.RemotePath);
+        if (record != null)
+        {
+            record.LocalPendingOp = "DeleteLocal";
+            record.InSync = false;
+            _journal.Upsert(record);
+        }
     }
 
     private void LogActiveRequestsForPath(string localPath, string remotePath)

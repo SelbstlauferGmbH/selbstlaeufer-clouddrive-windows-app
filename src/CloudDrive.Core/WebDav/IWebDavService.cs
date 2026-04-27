@@ -19,3 +19,12 @@ public interface IWebDavService
     Task<bool> TestConnectionAsync(CancellationToken ct = default);
     Task<HealthCheckResult> HealthCheckAsync(CancellationToken ct = default);
 }
+
+public interface ISyncCollectionWebDavService : IWebDavService
+{
+    Task<SyncCollectionResult> ReportSyncCollectionAsync(
+        string remotePath,
+        string? syncToken,
+        int depth,
+        CancellationToken ct = default);
+}

@@ -4,6 +4,9 @@ namespace CloudDrive.Core.SyncEngine;
 
 public interface ISyncProblemService
 {
+    event Action<SyncProblem>? ProblemReported;
+    event Action<string>? ProblemResolved;
+
     SyncProblem Report(SyncProblem problem);
     void Resolve(long problemId);
     void ResolveByDedupeKey(string dedupeKey);

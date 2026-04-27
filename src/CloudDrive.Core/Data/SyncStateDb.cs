@@ -79,6 +79,63 @@ public class SyncStateDb : IDisposable
                 );
                 CREATE INDEX IF NOT EXISTS idx_sync_problems_status ON sync_problems(status, last_occurred_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_sync_problems_dedupe ON sync_problems(dedupe_key);
+
+                CREATE TABLE IF NOT EXISTS sync_journal (
+                    file_id TEXT PRIMARY KEY,
+                    local_path TEXT NOT NULL UNIQUE,
+                    remote_path TEXT NOT NULL UNIQUE,
+                    etag TEXT,
+                    mtime_utc TEXT,
+                    size INTEGER NOT NULL DEFAULT 0,
+                    checksum TEXT,
+                    pin_state TEXT,
+                    is_directory INTEGER NOT NULL DEFAULT 0,
+                    in_sync INTEGER NOT NULL DEFAULT 1,
+                    base_etag TEXT,
+                    local_pending_op TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_sync_journal_local ON sync_journal(local_path);
+                CREATE INDEX IF NOT EXISTS idx_sync_journal_remote ON sync_journal(remote_path);
+                CREATE INDEX IF NOT EXISTS idx_sync_journal_pending ON sync_journal(local_pending_op);
+
+                CREATE TABLE IF NOT EXISTS pending_conflicts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_id TEXT NOT NULL,
+                    local_path TEXT NOT NULL,
+                    remote_path TEXT NOT NULL,
+                    base_etag TEXT,
+                    local_checksum TEXT,
+                    remote_etag TEXT,
+                    local_mtime_utc TEXT,
+                    remote_mtime_utc TEXT,
+                    local_size INTEGER NOT NULL DEFAULT 0,
+                    remote_size INTEGER NOT NULL DEFAULT 0,
+                    remote_temp_path TEXT,
+                    status INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE(file_id, status)
+                );
+                CREATE INDEX IF NOT EXISTS idx_pending_conflicts_path ON pending_conflicts(local_path, status);
+
+                CREATE TABLE IF NOT EXISTS propagator_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_id TEXT NOT NULL UNIQUE,
+                    job_type INTEGER NOT NULL,
+                    file_id TEXT,
+                    local_path TEXT NOT NULL,
+                    remote_path TEXT NOT NULL,
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    status INTEGER NOT NULL DEFAULT 0,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    lease_until_utc TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE INDEX IF NOT EXISTS idx_propagator_jobs_status ON propagator_jobs(status, lease_until_utc, id);
                 """;
             cmd.ExecuteNonQuery();
         }
@@ -244,6 +301,405 @@ public class SyncStateDb : IDisposable
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "DELETE FROM sync_items WHERE local_path LIKE @pattern";
             cmd.Parameters.AddWithValue("@pattern", localDirectoryPath.TrimEnd('\\') + "\\%");
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public SyncJournalRecord? GetJournalByFileId(string fileId)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT * FROM sync_journal WHERE file_id = @fileId";
+            cmd.Parameters.AddWithValue("@fileId", fileId);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadJournalRecord(reader) : null;
+        }
+    }
+
+    public SyncJournalRecord? GetJournalByLocalPath(string localPath)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT * FROM sync_journal WHERE local_path = @path";
+            cmd.Parameters.AddWithValue("@path", localPath);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadJournalRecord(reader) : null;
+        }
+    }
+
+    public SyncJournalRecord? GetJournalByRemotePath(string remotePath)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT * FROM sync_journal WHERE remote_path = @path";
+            cmd.Parameters.AddWithValue("@path", remotePath);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadJournalRecord(reader) : null;
+        }
+    }
+
+    public List<SyncJournalRecord> GetJournalChildren(string localDirectoryPath)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT * FROM sync_journal
+                WHERE local_path LIKE @pattern
+                AND local_path NOT LIKE @subPattern
+                ORDER BY local_path
+                """;
+            var prefix = localDirectoryPath.TrimEnd('\\') + "\\";
+            cmd.Parameters.AddWithValue("@pattern", prefix + "%");
+            cmd.Parameters.AddWithValue("@subPattern", prefix + "%\\%");
+
+            var records = new List<SyncJournalRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                records.Add(ReadJournalRecord(reader));
+            return records;
+        }
+    }
+
+    public List<SyncJournalRecord> GetAllJournalRecords()
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT * FROM sync_journal ORDER BY local_path";
+
+            var records = new List<SyncJournalRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                records.Add(ReadJournalRecord(reader));
+            return records;
+        }
+    }
+
+    public void UpsertJournalRecord(SyncJournalRecord record)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO sync_journal (
+                    file_id,
+                    local_path,
+                    remote_path,
+                    etag,
+                    mtime_utc,
+                    size,
+                    checksum,
+                    pin_state,
+                    is_directory,
+                    in_sync,
+                    base_etag,
+                    local_pending_op,
+                    updated_at
+                )
+                VALUES (
+                    @fileId,
+                    @localPath,
+                    @remotePath,
+                    @etag,
+                    @mtime,
+                    @size,
+                    @checksum,
+                    @pinState,
+                    @isDirectory,
+                    @inSync,
+                    @baseEtag,
+                    @localPendingOp,
+                    datetime('now')
+                )
+                ON CONFLICT(file_id) DO UPDATE SET
+                    local_path = @localPath,
+                    remote_path = @remotePath,
+                    etag = @etag,
+                    mtime_utc = @mtime,
+                    size = @size,
+                    checksum = @checksum,
+                    pin_state = @pinState,
+                    is_directory = @isDirectory,
+                    in_sync = @inSync,
+                    base_etag = @baseEtag,
+                    local_pending_op = @localPendingOp,
+                    updated_at = datetime('now')
+                """;
+            cmd.Parameters.AddWithValue("@fileId", record.FileId);
+            cmd.Parameters.AddWithValue("@localPath", record.LocalPath);
+            cmd.Parameters.AddWithValue("@remotePath", record.RemotePath);
+            cmd.Parameters.AddWithValue("@etag", (object?)record.ETag ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mtime", record.MTimeUtc?.ToString("o") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@size", record.Size);
+            cmd.Parameters.AddWithValue("@checksum", (object?)record.Checksum ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@pinState", (object?)record.PinState ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@isDirectory", record.IsDirectory ? 1 : 0);
+            cmd.Parameters.AddWithValue("@inSync", record.InSync ? 1 : 0);
+            cmd.Parameters.AddWithValue("@baseEtag", (object?)record.BaseETag ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@localPendingOp", (object?)record.LocalPendingOp ?? DBNull.Value);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void DeleteJournalRecord(string fileId)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM sync_journal WHERE file_id = @fileId";
+            cmd.Parameters.AddWithValue("@fileId", fileId);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public PendingConflictRecord UpsertPendingConflict(PendingConflictRecord record)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO pending_conflicts (
+                    file_id,
+                    local_path,
+                    remote_path,
+                    base_etag,
+                    local_checksum,
+                    remote_etag,
+                    local_mtime_utc,
+                    remote_mtime_utc,
+                    local_size,
+                    remote_size,
+                    remote_temp_path,
+                    status,
+                    updated_at
+                )
+                VALUES (
+                    @fileId,
+                    @localPath,
+                    @remotePath,
+                    @baseEtag,
+                    @localChecksum,
+                    @remoteEtag,
+                    @localMtime,
+                    @remoteMtime,
+                    @localSize,
+                    @remoteSize,
+                    @remoteTempPath,
+                    @status,
+                    datetime('now')
+                )
+                ON CONFLICT(file_id, status) DO UPDATE SET
+                    local_path = @localPath,
+                    remote_path = @remotePath,
+                    base_etag = @baseEtag,
+                    local_checksum = @localChecksum,
+                    remote_etag = @remoteEtag,
+                    local_mtime_utc = @localMtime,
+                    remote_mtime_utc = @remoteMtime,
+                    local_size = @localSize,
+                    remote_size = @remoteSize,
+                    remote_temp_path = @remoteTempPath,
+                    updated_at = datetime('now')
+                RETURNING *
+                """;
+            cmd.Parameters.AddWithValue("@fileId", record.FileId);
+            cmd.Parameters.AddWithValue("@localPath", record.LocalPath);
+            cmd.Parameters.AddWithValue("@remotePath", record.RemotePath);
+            cmd.Parameters.AddWithValue("@baseEtag", (object?)record.BaseETag ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@localChecksum", (object?)record.LocalChecksum ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@remoteEtag", (object?)record.RemoteETag ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@localMtime", record.LocalMTimeUtc?.ToString("o") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@remoteMtime", record.RemoteMTimeUtc?.ToString("o") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@localSize", record.LocalSize);
+            cmd.Parameters.AddWithValue("@remoteSize", record.RemoteSize);
+            cmd.Parameters.AddWithValue("@remoteTempPath", (object?)record.RemoteTempPath ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@status", (int)record.Status);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadPendingConflict(reader) : record;
+        }
+    }
+
+    public PendingConflictRecord? GetPendingConflict(string fileId)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT * FROM pending_conflicts
+                WHERE file_id = @fileId AND status = @status
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1
+                """;
+            cmd.Parameters.AddWithValue("@fileId", fileId);
+            cmd.Parameters.AddWithValue("@status", (int)PendingConflictStatus.Pending);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadPendingConflict(reader) : null;
+        }
+    }
+
+    public PropagatorJobRecord EnqueuePropagatorJob(PropagatorJobRecord job)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO propagator_jobs (
+                    operation_id,
+                    job_type,
+                    file_id,
+                    local_path,
+                    remote_path,
+                    payload_json,
+                    status,
+                    attempt_count,
+                    lease_until_utc,
+                    last_error,
+                    updated_at
+                )
+                VALUES (
+                    @operationId,
+                    @jobType,
+                    @fileId,
+                    @localPath,
+                    @remotePath,
+                    @payloadJson,
+                    @status,
+                    @attemptCount,
+                    @leaseUntil,
+                    @lastError,
+                    datetime('now')
+                )
+                ON CONFLICT(operation_id) DO UPDATE SET
+                    job_type = @jobType,
+                    file_id = @fileId,
+                    local_path = @localPath,
+                    remote_path = @remotePath,
+                    payload_json = @payloadJson,
+                    status = @status,
+                    attempt_count = @attemptCount,
+                    lease_until_utc = @leaseUntil,
+                    last_error = @lastError,
+                    updated_at = datetime('now')
+                RETURNING *
+                """;
+            cmd.Parameters.AddWithValue("@operationId", job.OperationId);
+            cmd.Parameters.AddWithValue("@jobType", (int)job.JobType);
+            cmd.Parameters.AddWithValue("@fileId", (object?)job.FileId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@localPath", job.LocalPath);
+            cmd.Parameters.AddWithValue("@remotePath", job.RemotePath);
+            cmd.Parameters.AddWithValue("@payloadJson", job.PayloadJson);
+            cmd.Parameters.AddWithValue("@status", (int)PropagatorJobStatus.Pending);
+            cmd.Parameters.AddWithValue("@attemptCount", job.AttemptCount);
+            cmd.Parameters.AddWithValue("@leaseUntil", job.LeaseUntilUtc?.ToString("o") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@lastError", (object?)job.LastError ?? DBNull.Value);
+
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? ReadPropagatorJob(reader) : job;
+        }
+    }
+
+    public List<PropagatorJobRecord> LeasePropagatorJobs(int limit, TimeSpan leaseDuration)
+    {
+        lock (_gate)
+        {
+            using var tx = _connection.BeginTransaction();
+            var now = DateTime.UtcNow;
+            var leaseUntil = now.Add(leaseDuration);
+            var ids = new List<long>();
+
+            using (var select = _connection.CreateCommand())
+            {
+                select.Transaction = tx;
+                select.CommandText = """
+                    SELECT id FROM propagator_jobs
+                    WHERE status IN (@pendingStatus, @leasedStatus, @failedStatus)
+                      AND (lease_until_utc IS NULL OR lease_until_utc < @now)
+                    ORDER BY created_at, id
+                    LIMIT @limit
+                    """;
+                select.Parameters.AddWithValue("@pendingStatus", (int)PropagatorJobStatus.Pending);
+                select.Parameters.AddWithValue("@leasedStatus", (int)PropagatorJobStatus.Leased);
+                select.Parameters.AddWithValue("@failedStatus", (int)PropagatorJobStatus.Failed);
+                select.Parameters.AddWithValue("@now", now.ToString("o"));
+                select.Parameters.AddWithValue("@limit", limit);
+
+                using var reader = select.ExecuteReader();
+                while (reader.Read())
+                    ids.Add(reader.GetInt64(0));
+            }
+
+            if (ids.Count == 0)
+            {
+                tx.Commit();
+                return [];
+            }
+
+            using (var update = _connection.CreateCommand())
+            {
+                update.Transaction = tx;
+                update.CommandText = $"""
+                    UPDATE propagator_jobs
+                    SET status = @leasedStatus,
+                        lease_until_utc = @leaseUntil,
+                        attempt_count = attempt_count + 1,
+                        updated_at = datetime('now')
+                    WHERE id IN ({string.Join(",", ids)})
+                    """;
+                update.Parameters.AddWithValue("@leasedStatus", (int)PropagatorJobStatus.Leased);
+                update.Parameters.AddWithValue("@leaseUntil", leaseUntil.ToString("o"));
+                update.ExecuteNonQuery();
+            }
+
+            var jobs = new List<PropagatorJobRecord>();
+            using (var fetch = _connection.CreateCommand())
+            {
+                fetch.Transaction = tx;
+                fetch.CommandText = $"SELECT * FROM propagator_jobs WHERE id IN ({string.Join(",", ids)}) ORDER BY id";
+                using var reader = fetch.ExecuteReader();
+                while (reader.Read())
+                    jobs.Add(ReadPropagatorJob(reader));
+            }
+
+            tx.Commit();
+            return jobs;
+        }
+    }
+
+    public void CompletePropagatorJob(string operationId)
+    {
+        UpdatePropagatorJobStatus(operationId, PropagatorJobStatus.Completed, null);
+    }
+
+    public void FailPropagatorJob(string operationId, string error)
+    {
+        UpdatePropagatorJobStatus(operationId, PropagatorJobStatus.Failed, error);
+    }
+
+    private void UpdatePropagatorJobStatus(string operationId, PropagatorJobStatus status, string? error)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                UPDATE propagator_jobs
+                SET status = @status,
+                    lease_until_utc = NULL,
+                    last_error = @lastError,
+                    updated_at = datetime('now')
+                WHERE operation_id = @operationId
+                """;
+            cmd.Parameters.AddWithValue("@status", (int)status);
+            cmd.Parameters.AddWithValue("@lastError", (object?)error ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@operationId", operationId);
             cmd.ExecuteNonQuery();
         }
     }
@@ -461,6 +917,69 @@ public class SyncStateDb : IDisposable
             LocalHash = reader.IsDBNull(reader.GetOrdinal("local_hash")) ? null : reader.GetString(reader.GetOrdinal("local_hash")),
             SyncStatus = (SyncStatus)reader.GetInt32(reader.GetOrdinal("sync_status")),
             LastSynced = reader.IsDBNull(reader.GetOrdinal("last_synced")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("last_synced"))),
+            CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
+            UpdatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("updated_at")))
+        };
+    }
+
+    private static SyncJournalRecord ReadJournalRecord(SqliteDataReader reader)
+    {
+        return new SyncJournalRecord
+        {
+            FileId = reader.GetString(reader.GetOrdinal("file_id")),
+            LocalPath = reader.GetString(reader.GetOrdinal("local_path")),
+            RemotePath = reader.GetString(reader.GetOrdinal("remote_path")),
+            ETag = reader.IsDBNull(reader.GetOrdinal("etag")) ? null : reader.GetString(reader.GetOrdinal("etag")),
+            MTimeUtc = reader.IsDBNull(reader.GetOrdinal("mtime_utc")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("mtime_utc"))),
+            Size = reader.GetInt64(reader.GetOrdinal("size")),
+            Checksum = reader.IsDBNull(reader.GetOrdinal("checksum")) ? null : reader.GetString(reader.GetOrdinal("checksum")),
+            PinState = reader.IsDBNull(reader.GetOrdinal("pin_state")) ? null : reader.GetString(reader.GetOrdinal("pin_state")),
+            IsDirectory = reader.GetInt32(reader.GetOrdinal("is_directory")) == 1,
+            InSync = reader.GetInt32(reader.GetOrdinal("in_sync")) == 1,
+            BaseETag = reader.IsDBNull(reader.GetOrdinal("base_etag")) ? null : reader.GetString(reader.GetOrdinal("base_etag")),
+            LocalPendingOp = reader.IsDBNull(reader.GetOrdinal("local_pending_op")) ? null : reader.GetString(reader.GetOrdinal("local_pending_op")),
+            CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
+            UpdatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("updated_at")))
+        };
+    }
+
+    private static PendingConflictRecord ReadPendingConflict(SqliteDataReader reader)
+    {
+        return new PendingConflictRecord
+        {
+            Id = reader.GetInt64(reader.GetOrdinal("id")),
+            FileId = reader.GetString(reader.GetOrdinal("file_id")),
+            LocalPath = reader.GetString(reader.GetOrdinal("local_path")),
+            RemotePath = reader.GetString(reader.GetOrdinal("remote_path")),
+            BaseETag = reader.IsDBNull(reader.GetOrdinal("base_etag")) ? null : reader.GetString(reader.GetOrdinal("base_etag")),
+            LocalChecksum = reader.IsDBNull(reader.GetOrdinal("local_checksum")) ? null : reader.GetString(reader.GetOrdinal("local_checksum")),
+            RemoteETag = reader.IsDBNull(reader.GetOrdinal("remote_etag")) ? null : reader.GetString(reader.GetOrdinal("remote_etag")),
+            LocalMTimeUtc = reader.IsDBNull(reader.GetOrdinal("local_mtime_utc")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("local_mtime_utc"))),
+            RemoteMTimeUtc = reader.IsDBNull(reader.GetOrdinal("remote_mtime_utc")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("remote_mtime_utc"))),
+            LocalSize = reader.GetInt64(reader.GetOrdinal("local_size")),
+            RemoteSize = reader.GetInt64(reader.GetOrdinal("remote_size")),
+            RemoteTempPath = reader.IsDBNull(reader.GetOrdinal("remote_temp_path")) ? null : reader.GetString(reader.GetOrdinal("remote_temp_path")),
+            Status = (PendingConflictStatus)reader.GetInt32(reader.GetOrdinal("status")),
+            CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
+            UpdatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("updated_at")))
+        };
+    }
+
+    private static PropagatorJobRecord ReadPropagatorJob(SqliteDataReader reader)
+    {
+        return new PropagatorJobRecord
+        {
+            Id = reader.GetInt64(reader.GetOrdinal("id")),
+            OperationId = reader.GetString(reader.GetOrdinal("operation_id")),
+            JobType = (PropagatorJobType)reader.GetInt32(reader.GetOrdinal("job_type")),
+            FileId = reader.IsDBNull(reader.GetOrdinal("file_id")) ? null : reader.GetString(reader.GetOrdinal("file_id")),
+            LocalPath = reader.GetString(reader.GetOrdinal("local_path")),
+            RemotePath = reader.GetString(reader.GetOrdinal("remote_path")),
+            PayloadJson = reader.GetString(reader.GetOrdinal("payload_json")),
+            Status = (PropagatorJobStatus)reader.GetInt32(reader.GetOrdinal("status")),
+            AttemptCount = reader.GetInt32(reader.GetOrdinal("attempt_count")),
+            LeaseUntilUtc = reader.IsDBNull(reader.GetOrdinal("lease_until_utc")) ? null : DateTime.Parse(reader.GetString(reader.GetOrdinal("lease_until_utc"))),
+            LastError = reader.IsDBNull(reader.GetOrdinal("last_error")) ? null : reader.GetString(reader.GetOrdinal("last_error")),
             CreatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
             UpdatedAt = DateTime.Parse(reader.GetString(reader.GetOrdinal("updated_at")))
         };

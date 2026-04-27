@@ -178,7 +178,7 @@ public class SyncProjectionService : ISyncProjectionService
                             localPath);
 
                         var trackedItem = _stateService.GetByLocalPath(localPath);
-                        if (trackedItem is { IsDirectory: false } &&
+                        if (trackedItem != null &&
                             !string.IsNullOrWhiteSpace(trackedItem.RemotePath) &&
                             SuppressAndConvertToPlaceholder(localPath, trackedItem.RemotePath))
                         {

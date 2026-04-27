@@ -6,6 +6,7 @@ using CloudDrive.Core.Configuration;
 using CloudDrive.Core.Data;
 using CloudDrive.Core.SyncEngine;
 using CloudDrive.Core.Localization;
+using CloudDrive.Core.Services;
 using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.WebDav;
 using CloudDrive.Core.Infrastructure;
@@ -25,6 +26,7 @@ public class SyncEngineHostedService : BackgroundService
     private MountStateMachine? _stateMachine;
     private ExplorerStatusManager? _explorerStatusManager;
     private ISyncProblemService? _problemService;
+    private WindowsNotificationService? _windowsNotificationService;
     private EventWaitHandle? _appRunningEvent;
     private string? _syncRootPath;
 
@@ -88,6 +90,11 @@ public class SyncEngineHostedService : BackgroundService
         // Create coordinator (but don't register/connect yet — wait for readiness gate)
         _coordinator = new SyncCoordinator(settings, webDav, _loggerFactory);
         _problemService = _coordinator.Problems;
+        _windowsNotificationService = new WindowsNotificationService(
+            _problemService,
+            _loggerFactory.CreateLogger<WindowsNotificationService>(),
+            appUserModelId: "SelbstlaeuferGmbH.CloudDrive",
+            enabled: settings.ShowNotifications);
         _coordinator.SetStateMachine(_stateMachine);
 
         // Create ExplorerStatusManager and inject into coordinator
@@ -373,6 +380,8 @@ public class SyncEngineHostedService : BackgroundService
             _coordinator.Dispose();
         }
         (_webDav as IDisposable)?.Dispose();
+        _windowsNotificationService?.Dispose();
+        _windowsNotificationService = null;
 
         // Persist a disconnected status in Explorer before releasing the presence handle.
         if (_explorerStatusManager != null && _syncRootPath != null)

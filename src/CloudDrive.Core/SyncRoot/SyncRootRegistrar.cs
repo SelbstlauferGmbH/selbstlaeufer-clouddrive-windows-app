@@ -84,6 +84,7 @@ public class SyncRootRegistrar
             ShowSiblingsAsGroup = false,
             Context = CryptographicBuffer.ConvertStringToBinary(syncRootId, BinaryStringEncoding.Utf8),
         };
+        AddItemPropertyDefinitions(syncRootInfo);
 
         StorageProviderSyncRootManager.Register(syncRootInfo);
         _logger.LogInformation("Sync root registered: {SyncRootId} at {Path}", syncRootId, syncRootPath);
@@ -307,6 +308,7 @@ public class SyncRootRegistrar
                 ShowSiblingsAsGroup = false,
                 Context = CryptographicBuffer.ConvertStringToBinary(syncRootId, BinaryStringEncoding.Utf8),
             };
+            AddItemPropertyDefinitions(syncRootInfo);
 
             StorageProviderSyncRootManager.Register(syncRootInfo);
             _lastIconRegistration = DateTime.UtcNow;
@@ -608,10 +610,61 @@ public class SyncRootRegistrar
         if (!string.Equals(normalizedExistingPath, normalizedRequestedPath, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return !string.Equals(
+        if (!string.Equals(
             existingRegistration.DisplayNameResource,
             ProviderDisplayName,
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var expectedPropertyIds = new HashSet<int>
+        {
+            ExplorerItemStateService.SyncedPropertyId,
+            ExplorerItemStateService.SyncingPropertyId,
+            ExplorerItemStateService.ConflictPropertyId,
+            ExplorerItemStateService.ErrorPropertyId,
+            ExplorerItemStateService.PinnedPropertyId,
+            ExplorerItemStateService.UnpinnedPropertyId
+        };
+        var registeredPropertyIds = existingRegistration.StorageProviderItemPropertyDefinitions
+            .Select(definition => definition.Id)
+            .ToHashSet();
+        return !expectedPropertyIds.IsSubsetOf(registeredPropertyIds);
+    }
+
+    private static void AddItemPropertyDefinitions(StorageProviderSyncRootInfo syncRootInfo)
+    {
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.SyncedPropertyId,
+            DisplayNameResource = "Synced"
+        });
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.SyncingPropertyId,
+            DisplayNameResource = "Syncing"
+        });
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.ConflictPropertyId,
+            DisplayNameResource = "Conflict"
+        });
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.ErrorPropertyId,
+            DisplayNameResource = "Error"
+        });
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.PinnedPropertyId,
+            DisplayNameResource = "Pinned"
+        });
+        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
+        {
+            Id = ExplorerItemStateService.UnpinnedPropertyId,
+            DisplayNameResource = "Online-only"
+        });
     }
 
     private static string? NormalizePath(string? path)

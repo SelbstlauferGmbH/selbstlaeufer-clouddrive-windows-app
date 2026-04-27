@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CloudDrive.Core.WebDav;
 
-public class WebDavService : IWebDavService, IDisposable
+public class WebDavService : ISyncCollectionWebDavService, IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<WebDavService> _logger;
@@ -90,6 +90,29 @@ public class WebDavService : IWebDavService, IDisposable
                 sw.Elapsed);
             throw;
         }
+    }
+
+    public async Task<SyncCollectionResult> ReportSyncCollectionAsync(
+        string remotePath,
+        string? syncToken,
+        int depth,
+        CancellationToken ct = default)
+    {
+        await _rateLimiter.WaitAsync(ct);
+        var sw = Stopwatch.StartNew();
+        var client = new SyncCollectionClient(_httpClient, _baseUrl, _logger);
+        var result = await client.ReportAsync(remotePath, syncToken, depth, ct);
+        sw.Stop();
+
+        _logger.LogInformation(
+            "WebDav[SyncCollection] RemotePath={RemotePath} Depth={Depth} Supported={Supported} ItemsReturned={ItemCount} DurationMs={DurationMs}",
+            remotePath,
+            depth <= 1 ? 1 : -1,
+            result.Supported,
+            result.Items.Count,
+            sw.ElapsedMilliseconds);
+
+        return result;
     }
 
     public Task<Stream> DownloadFileAsync(string remotePath, CancellationToken ct = default) =>
