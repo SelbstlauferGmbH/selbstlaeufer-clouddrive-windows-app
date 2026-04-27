@@ -11,12 +11,15 @@ namespace CloudDrive.Core.SyncEngine;
 
 public sealed class Propagator
 {
+    private static readonly TimeSpan UploadStabilityDelay = TimeSpan.FromMilliseconds(750);
+
     private readonly IVfs _vfs;
     private readonly SyncJournal _journal;
     private readonly IWebDavService _webDav;
     private readonly ISyncProblemService _problemService;
     private readonly ISyncItemStateService? _stateService;
     private readonly ExplorerItemStateService? _explorerItemStateService;
+    private readonly IWebDavLockCoordinator? _lockCoordinator;
     private readonly ILogger<Propagator> _logger;
 
     public Propagator(
@@ -26,7 +29,8 @@ public sealed class Propagator
         ISyncProblemService problemService,
         ILogger<Propagator> logger,
         ISyncItemStateService? stateService = null,
-        ExplorerItemStateService? explorerItemStateService = null)
+        ExplorerItemStateService? explorerItemStateService = null,
+        IWebDavLockCoordinator? lockCoordinator = null)
     {
         _vfs = vfs;
         _journal = journal;
@@ -35,6 +39,7 @@ public sealed class Propagator
         _logger = logger;
         _stateService = stateService;
         _explorerItemStateService = explorerItemStateService;
+        _lockCoordinator = lockCoordinator;
     }
 
     public async Task ApplyAsync(ReconcileAction action, CancellationToken ct)
@@ -71,6 +76,13 @@ public sealed class Propagator
 
     private async Task UploadAsync(ReconcileAction action, CancellationToken ct)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(action.LocalPath, Directory.Exists(action.LocalPath)) ||
+            TransientFilePolicy.ShouldIgnoreRemotePath(action.RemotePath, Directory.Exists(action.LocalPath)))
+        {
+            _logger.LogDebug("Skipping transient upload candidate: {LocalPath} -> {RemotePath}", action.LocalPath, action.RemotePath);
+            return;
+        }
+
         if (Directory.Exists(action.LocalPath))
         {
             await _webDav.CreateDirectoryAsync(action.RemotePath, ct);
@@ -95,36 +107,81 @@ public sealed class Propagator
         }
 
         if (!File.Exists(action.LocalPath))
-            throw new FileNotFoundException($"Cannot upload missing local file: {action.LocalPath}", action.LocalPath);
+        {
+            _logger.LogDebug("Skipping stale upload job for missing local file: {LocalPath}", action.LocalPath);
+            return;
+        }
+
+        var snapshot = await WaitForStableFileAsync(action.LocalPath, ct);
+
+        var pendingMetadata = new VfsMetadata(
+            action.FileId ?? action.Local?.FileId ?? SyncIdentity.NewLocalId(),
+            action.RemotePath,
+            action.Remote?.ETag ?? action.Journal?.ETag,
+            snapshot.Length,
+            snapshot.LastWriteTimeUtc,
+            IsDirectory: false,
+            action.Local?.PinState ?? PinState.Unspecified,
+            InSync: false);
+
+        await EnsureUploadPlaceholderMetadataAsync(action.LocalPath, pendingMetadata, ct);
 
         var parentRemote = GetParentRemotePath(action.RemotePath);
         if (!string.IsNullOrWhiteSpace(parentRemote) && parentRemote != "/")
             await _webDav.CreateDirectoryAsync(parentRemote, ct);
 
-        await using var fileStream = new FileStream(action.LocalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var etag = await _webDav.UploadFileAsync(action.RemotePath, fileStream, ct);
-        var info = new FileInfo(action.LocalPath);
-        var checksum = await FileHasher.ComputeSha256Async(action.LocalPath, ct);
+        await using var writeLock = await AcquireWriteLockAsync(action.LocalPath, action.RemotePath, ct);
+        await using var fileStream = OpenSharedReadStream(action.LocalPath);
+        if (fileStream.Length != snapshot.Length)
+            throw FileChangedDuringUpload(action.LocalPath);
+
+        var etag = await _webDav.UploadFileAsync(action.RemotePath, fileStream, writeLock.Token, ct);
+        var uploadedSnapshot = GetAccessibleFileSnapshot(action.LocalPath);
+        if (uploadedSnapshot != snapshot)
+            throw FileChangedDuringUpload(action.LocalPath);
+
+        var uploadedRemote = await _webDav.GetPropertiesAsync(action.RemotePath, ct);
+        var uploadedRemoteEtag = etag ?? uploadedRemote?.ETag;
+        var uploadedRemoteSize = uploadedRemote?.Size ?? uploadedSnapshot.Length;
+        var uploadedRemoteMTime = uploadedRemote?.LastModified is { } remoteLastModified &&
+                                  remoteLastModified != DateTime.MinValue
+            ? remoteLastModified.ToUniversalTime()
+            : uploadedSnapshot.LastWriteTimeUtc;
+
+        string checksum;
+        try
+        {
+            checksum = await FileHasher.ComputeSha256Async(action.LocalPath, ct);
+        }
+        catch (Exception ex) when (IsLocalAccessException(ex))
+        {
+            throw new LocalFileTemporarilyUnavailableException(
+                action.LocalPath,
+                $"Local file is temporarily unavailable: {action.LocalPath}",
+                ex);
+        }
 
         var metadata = new VfsMetadata(
-            action.FileId ?? action.Local?.FileId ?? SyncIdentity.NewLocalId(),
+            pendingMetadata.FileId,
             action.RemotePath,
-            etag,
-            info.Length,
-            info.LastWriteTimeUtc,
+            uploadedRemoteEtag,
+            uploadedRemoteSize,
+            uploadedRemoteMTime,
             IsDirectory: false,
             action.Local?.PinState ?? PinState.Unspecified,
             InSync: true);
 
-        await EnsurePlaceholderMetadataAsync(action.LocalPath, metadata, ct);
-        await RequireInSyncAsync(action.LocalPath, ct);
-        UpsertJournal(action with { FileId = metadata.FileId }, null, isDirectory: false, info.Length, checksum, etag, info.LastWriteTimeUtc);
+        await EnsureUploadPlaceholderMetadataAsync(action.LocalPath, metadata, ct);
+        await RequireUploadInSyncAsync(action.LocalPath, ct);
+        UpsertJournal(action with { FileId = metadata.FileId }, uploadedRemote, isDirectory: false, uploadedRemoteSize, checksum, uploadedRemoteEtag, uploadedRemoteMTime);
+        await NotifyUploadSucceededAsync(action.LocalPath, action.RemotePath, ct);
         await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
         _logger.LogInformation(
             "Propagated local file upload: {LocalPath} -> {RemotePath} Size={Size}",
             action.LocalPath,
             action.RemotePath,
-            info.Length);
+            uploadedRemoteSize);
+        _logger.LogInformation("UPLOAD_FILE complete: {Path} Synced", action.RemotePath);
     }
 
     private async Task DownloadAsync(ReconcileAction action, CancellationToken ct)
@@ -155,20 +212,25 @@ public sealed class Propagator
             return;
         }
 
-        await using var remoteStream = await _webDav.DownloadFileAsync(action.Remote.RemotePath, ct);
-        var hydrate = await _vfs.HydrateAsync(action.LocalPath, remoteStream, action.Remote.Size, progress: null, ct);
-        if (hydrate.Failed)
-            throw new IOException(hydrate.ErrorMessage);
+        if (File.Exists(action.LocalPath) || Directory.Exists(action.LocalPath))
+        {
+            await EnsurePlaceholderMetadataAsync(action.LocalPath, metadata, ct);
+            var dehydrate = await _vfs.DehydrateAsync(action.LocalPath, ct);
+            if (dehydrate.Failed)
+                throw new IOException(dehydrate.ErrorMessage);
+        }
+        else
+        {
+            var create = await _vfs.CreatePlaceholderAsync(action.LocalPath, metadata, ct);
+            if (create.Failed)
+                throw new IOException(create.ErrorMessage);
+        }
 
-        await EnsurePlaceholderMetadataAsync(action.LocalPath, metadata, ct);
         await RequireInSyncAsync(action.LocalPath, ct);
-        var checksum = File.Exists(action.LocalPath)
-            ? await FileHasher.ComputeSha256Async(action.LocalPath, ct)
-            : null;
-        UpsertJournal(action with { FileId = fileId }, action.Remote, isDirectory: false, action.Remote.Size, checksum);
+        UpsertJournal(action with { FileId = fileId }, action.Remote, isDirectory: false, action.Remote.Size, checksum: null);
         await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
         _logger.LogInformation(
-            "Propagated remote file download: {RemotePath} -> {LocalPath} Size={Size}",
+            "Propagated remote file placeholder: {RemotePath} -> {LocalPath} Size={Size}",
             action.Remote.RemotePath,
             action.LocalPath,
             action.Remote.Size);
@@ -185,11 +247,122 @@ public sealed class Propagator
             throw new IOException(convert.ErrorMessage ?? $"Failed to convert {localPath} to placeholder.");
     }
 
+    private async Task EnsureUploadPlaceholderMetadataAsync(string localPath, VfsMetadata metadata, CancellationToken ct)
+    {
+        var update = await _vfs.UpdateMetadataAsync(localPath, metadata, ct);
+        if (update.Succeeded)
+            return;
+
+        var convert = await _vfs.ConvertToPlaceholderAsync(localPath, metadata, ct);
+        if (convert.Succeeded)
+            return;
+
+        var failure = convert.ErrorMessage ?? update.ErrorMessage ?? $"Failed to convert {localPath} to placeholder.";
+        if (IsLocalMetadataUnavailable(localPath, update) || IsLocalMetadataUnavailable(localPath, convert))
+            throw new LocalFileTemporarilyUnavailableException(localPath, failure, convert.Exception ?? update.Exception);
+
+        throw new IOException(failure, convert.Exception ?? update.Exception);
+    }
+
     private async Task RequireInSyncAsync(string localPath, CancellationToken ct)
     {
         var result = await _vfs.SetInSyncAsync(localPath, true, ct);
         if (result.Failed)
             throw new IOException(result.ErrorMessage ?? $"Failed to mark {localPath} in sync.");
+    }
+
+    private async Task RequireUploadInSyncAsync(string localPath, CancellationToken ct)
+    {
+        var result = await _vfs.SetInSyncAsync(localPath, true, ct);
+        if (result.Succeeded)
+            return;
+
+        var failure = result.ErrorMessage ?? $"Failed to mark {localPath} in sync.";
+        if (IsLocalMetadataUnavailable(localPath, result))
+            throw new LocalFileTemporarilyUnavailableException(localPath, failure, result.Exception);
+
+        throw new IOException(failure, result.Exception);
+    }
+
+    private async Task<LocalFileSnapshot> WaitForStableFileAsync(string localPath, CancellationToken ct)
+    {
+        var first = GetAccessibleFileSnapshot(localPath);
+        await Task.Delay(UploadStabilityDelay, ct);
+        var second = GetAccessibleFileSnapshot(localPath);
+
+        if (first != second)
+            throw FileChangedDuringUpload(localPath);
+
+        return second;
+    }
+
+    private static LocalFileSnapshot GetAccessibleFileSnapshot(string localPath)
+    {
+        try
+        {
+            using var stream = OpenSharedReadStream(localPath);
+            var info = new FileInfo(localPath);
+            return new LocalFileSnapshot(stream.Length, info.LastWriteTimeUtc);
+        }
+        catch (Exception ex) when (IsLocalAccessException(ex))
+        {
+            throw new LocalFileTemporarilyUnavailableException(
+                localPath,
+                $"Local file is temporarily unavailable: {localPath}",
+                ex);
+        }
+    }
+
+    private static FileStream OpenSharedReadStream(string localPath)
+    {
+        try
+        {
+            return new FileStream(
+                localPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete,
+                81920,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+        }
+        catch (Exception ex) when (IsLocalAccessException(ex))
+        {
+            throw new LocalFileTemporarilyUnavailableException(
+                localPath,
+                $"Local file is temporarily unavailable: {localPath}",
+                ex);
+        }
+    }
+
+    private static LocalFileTemporarilyUnavailableException FileChangedDuringUpload(string localPath) =>
+        new(localPath, $"Local file changed while it was being prepared for upload: {localPath}");
+
+    private static bool IsLocalAccessException(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException;
+
+    private static bool IsLocalMetadataUnavailable(string localPath, VfsResult result)
+    {
+        if (!File.Exists(localPath) && !Directory.Exists(localPath))
+            return false;
+
+        if (result.Exception != null && IsLocalAccessException(result.Exception))
+            return true;
+
+        if (result.ErrorCode == VfsErrorCode.NotFound &&
+            (result.ErrorMessage?.Contains("Cannot open path", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            return true;
+        }
+
+        if (result.ErrorCode == VfsErrorCode.PlatformError &&
+            (result.ErrorMessage?.Contains("access", StringComparison.OrdinalIgnoreCase) == true ||
+             result.ErrorMessage?.Contains("Zugriff", StringComparison.OrdinalIgnoreCase) == true ||
+             result.ErrorMessage?.Contains("Cannot open path", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private async Task MoveRemoteAsync(ReconcileAction action, CancellationToken ct)
@@ -199,7 +372,8 @@ public sealed class Propagator
 
         var previousLocalPath = action.PreviousLocalPath ?? action.Journal?.LocalPath ?? action.LocalPath;
         var previousSyncItem = _stateService?.GetByLocalPath(previousLocalPath);
-        await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, ct);
+        await using var writeLock = await AcquireWriteLockAsync(previousLocalPath, action.PreviousRemotePath, ct);
+        await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, writeLock.Token, ct);
         var record = action.Journal ?? CreateJournalRecordFromLegacyState(action, previousSyncItem);
         var previousJournalLocalPath = record.LocalPath;
         var previousJournalRemotePath = record.RemotePath;
@@ -234,7 +408,9 @@ public sealed class Propagator
     private async Task DeleteRemoteAsync(ReconcileAction action, CancellationToken ct)
     {
         var isDirectory = IsDirectoryAction(action);
-        await _webDav.DeleteAsync(action.RemotePath, ct);
+        await using var writeLock = await AcquireWriteLockAsync(action.LocalPath, action.RemotePath, ct);
+        await _webDav.DeleteAsync(action.RemotePath, writeLock.Token, ct);
+        await NotifyDeleteSucceededAsync(action.RemotePath, ct);
         DeleteTrackedState(action, isDirectory);
         _logger.LogInformation("Propagated remote delete: {RemotePath}", action.RemotePath);
     }
@@ -307,10 +483,14 @@ public sealed class Propagator
         string? etagOverride = null,
         DateTime? mtimeOverride = null)
     {
-        var record = action.Journal ?? new SyncJournalRecord
-        {
-            FileId = action.FileId ?? SyncIdentity.NewLocalId()
-        };
+        var record = action.Journal
+            ?? (!string.IsNullOrWhiteSpace(action.FileId) ? _journal.GetByFileId(action.FileId) : null)
+            ?? _journal.GetByLocalPath(action.LocalPath)
+            ?? _journal.GetByRemotePath(action.RemotePath)
+            ?? new SyncJournalRecord
+            {
+                FileId = action.FileId ?? SyncIdentity.NewLocalId()
+            };
 
         record.LocalPath = action.LocalPath;
         record.RemotePath = action.RemotePath;
@@ -347,6 +527,24 @@ public sealed class Propagator
     private Task SetExplorerStateAsync(string localPath, ExplorerItemState state, CancellationToken ct)
     {
         return _explorerItemStateService?.SetStateAsync(localPath, state, ct) ?? Task.CompletedTask;
+    }
+
+    private Task<WebDavWriteLock> AcquireWriteLockAsync(string localPath, string remotePath, CancellationToken ct)
+    {
+        return _lockCoordinator?.AcquireWriteLockAsync(localPath, remotePath, ct)
+            ?? Task.FromResult(WebDavWriteLock.None);
+    }
+
+    private Task NotifyUploadSucceededAsync(string localPath, string remotePath, CancellationToken ct)
+    {
+        return _lockCoordinator?.NotifyUploadSucceededAsync(localPath, remotePath, ct)
+            ?? Task.CompletedTask;
+    }
+
+    private Task NotifyDeleteSucceededAsync(string remotePath, CancellationToken ct)
+    {
+        return _lockCoordinator?.NotifyDeleteSucceededAsync(remotePath, ct)
+            ?? Task.CompletedTask;
     }
 
     private SyncJournalRecord CreateJournalRecordFromLegacyState(ReconcileAction action, SyncItem? syncItem)
@@ -491,4 +689,6 @@ public sealed class Propagator
         var suffix = path.Length > normalizedOld.Length ? path[normalizedOld.Length..] : string.Empty;
         return string.IsNullOrEmpty(normalizedNew) ? "/" + suffix.TrimStart('/') : normalizedNew + suffix;
     }
+
+    private sealed record LocalFileSnapshot(long Length, DateTime LastWriteTimeUtc);
 }

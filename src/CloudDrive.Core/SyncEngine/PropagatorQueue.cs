@@ -36,6 +36,9 @@ public sealed class PropagatorQueue
 
     public void Complete(string operationId) => _db.CompletePropagatorJob(operationId);
 
+    public void Defer(string operationId, TimeSpan delay, string error) =>
+        _db.DeferPropagatorJob(operationId, delay, error);
+
     public void Fail(string operationId, string error) => _db.FailPropagatorJob(operationId, error);
 
     public static string BuildOperationId(ReconcileAction action)

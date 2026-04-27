@@ -139,6 +139,33 @@ public class DiscoveryWalkerTests
         actions.ShouldContain(a => a.Type == ReconcileActionType.DownloadNew && a.RemotePath == "/remote.txt");
     }
 
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_IgnoresOfficeTransientFiles()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+
+        await File.WriteAllTextAsync(Path.Combine(tempDir.Path, "~$report.docx"), "owner");
+        await File.WriteAllTextAsync(Path.Combine(tempDir.Path, "~WRL0001.tmp"), "scratch");
+        await File.WriteAllTextAsync(Path.Combine(tempDir.Path, "report.docx"), "content");
+        webDav.AddFile("/~$remote.docx", "owner", "etag-owner");
+        webDav.AddFile("/~WRD0000.tmp", "scratch", "etag-scratch");
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.ShouldContain(a => a.Type == ReconcileActionType.UploadNew && a.RemotePath == "/report.docx");
+        actions.ShouldNotContain(a => a.LocalPath.Contains("~$", StringComparison.OrdinalIgnoreCase));
+        actions.ShouldNotContain(a => a.LocalPath.Contains("~WR", StringComparison.OrdinalIgnoreCase));
+        actions.ShouldNotContain(a => a.RemotePath.Contains("~$", StringComparison.OrdinalIgnoreCase));
+        actions.ShouldNotContain(a => a.RemotePath.Contains("~WR", StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()

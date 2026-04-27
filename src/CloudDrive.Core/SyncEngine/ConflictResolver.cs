@@ -37,6 +37,12 @@ public class ConflictResolver
         string remotePath,
         CancellationToken ct)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath) ||
+            TransientFilePolicy.ShouldIgnoreRemotePath(remotePath))
+        {
+            return false;
+        }
+
         if (!File.Exists(localPath))
             return false;
 

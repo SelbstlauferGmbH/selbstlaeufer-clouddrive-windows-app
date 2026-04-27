@@ -65,9 +65,15 @@ public class RemoteChangeDetector
         var directoryStopwatch = Stopwatch.StartNew();
         _logger.LogDebug("Remote scan visiting directory: {RemotePath}", remotePath);
 
-        var remoteItems = await _webDav.ListDirectoryAsync(remotePath, ct);
+        var remoteItems = (await _webDav.ListDirectoryAsync(remotePath, ct))
+            .Where(item => !TransientFilePolicy.ShouldIgnoreRemotePath(item.RemotePath, item.IsDirectory))
+            .ToList();
         var localDirPath = _pathMapper.ToLocalPath(remotePath);
-        var localChildren = _stateService.GetChildren(localDirPath);
+        var localChildren = _stateService.GetChildren(localDirPath)
+            .Where(item =>
+                !TransientFilePolicy.ShouldIgnoreLocalPath(item.LocalPath, item.IsDirectory) &&
+                !TransientFilePolicy.ShouldIgnoreRemotePath(item.RemotePath, item.IsDirectory))
+            .ToList();
         var shouldRefreshExplorer = false;
 
         var remoteSet = new HashSet<string>(remoteItems.Select(r => r.RemotePath), StringComparer.OrdinalIgnoreCase);

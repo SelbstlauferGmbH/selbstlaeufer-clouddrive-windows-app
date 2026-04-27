@@ -13,6 +13,12 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
     public bool SyncCollectionSupported { get; set; } = true;
 
     public int SyncCollectionReportCount { get; private set; }
+    public int LockCount { get; private set; }
+    public int UnlockCount { get; private set; }
+    public int UploadWithLockTokenCount { get; private set; }
+    public string? LastUploadLockToken { get; private set; }
+
+    private readonly Dictionary<string, string> _lockTokens = new(StringComparer.OrdinalIgnoreCase);
 
     public void AddDirectory(string remotePath)
     {
@@ -103,10 +109,17 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
         return Task.FromResult<Stream>(new MemoryStream(content.AsSpan((int)start, (int)count).ToArray()));
     }
 
-    public async Task<string?> UploadFileAsync(string remotePath, Stream content, CancellationToken ct = default)
+    public Task<string?> UploadFileAsync(string remotePath, Stream content, CancellationToken ct = default) =>
+        UploadFileAsync(remotePath, content, lockToken: null, ct);
+
+    public async Task<string?> UploadFileAsync(string remotePath, Stream content, string? lockToken, CancellationToken ct = default)
     {
         remotePath = Normalize(remotePath);
         EnsureParent(remotePath);
+        LastUploadLockToken = lockToken;
+        if (!string.IsNullOrWhiteSpace(lockToken))
+            UploadWithLockTokenCount++;
+
         await using var buffer = new MemoryStream();
         await content.CopyToAsync(buffer, ct);
         var etag = NewETag();
@@ -114,7 +127,10 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
         return etag;
     }
 
-    public Task DeleteAsync(string remotePath, CancellationToken ct = default)
+    public Task DeleteAsync(string remotePath, CancellationToken ct = default) =>
+        DeleteAsync(remotePath, lockToken: null, ct);
+
+    public Task DeleteAsync(string remotePath, string? lockToken, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         remotePath = Normalize(remotePath);
@@ -130,7 +146,10 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
         return Task.CompletedTask;
     }
 
-    public Task MoveAsync(string fromPath, string toPath, CancellationToken ct = default)
+    public Task MoveAsync(string fromPath, string toPath, CancellationToken ct = default) =>
+        MoveAsync(fromPath, toPath, lockToken: null, ct);
+
+    public Task MoveAsync(string fromPath, string toPath, string? lockToken, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         fromPath = Normalize(fromPath);
@@ -143,6 +162,33 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
         EnsureParent(toPath);
         _entries.Remove(fromPath);
         _entries[toPath] = entry with { RemotePath = toPath, LastModified = DateTime.UtcNow };
+        return Task.CompletedTask;
+    }
+
+    public Task<WebDavLockInfo> LockAsync(string remotePath, WebDavLockRequest request, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        remotePath = Normalize(remotePath);
+        var token = $"<opaquelocktoken:{Guid.NewGuid():N}>";
+        _lockTokens[remotePath] = token;
+        LockCount++;
+        return Task.FromResult(new WebDavLockInfo(remotePath, token, DateTimeOffset.UtcNow.Add(request.Timeout)));
+    }
+
+    public Task<WebDavLockInfo> RefreshLockAsync(string remotePath, string lockToken, TimeSpan timeout, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        remotePath = Normalize(remotePath);
+        _lockTokens[remotePath] = lockToken;
+        return Task.FromResult(new WebDavLockInfo(remotePath, lockToken, DateTimeOffset.UtcNow.Add(timeout)));
+    }
+
+    public Task UnlockAsync(string remotePath, string lockToken, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        remotePath = Normalize(remotePath);
+        _lockTokens.Remove(remotePath);
+        UnlockCount++;
         return Task.CompletedTask;
     }
 

@@ -27,6 +27,8 @@ public class SyncRootConnector : IDisposable
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FetchPlaceholdersRequested;
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FetchDataRequested;
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? CancelFetchDataRequested;
+    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FileOpenCompleted;
+    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FileCloseCompleted;
 
     public SyncRootConnector(ILogger<SyncRootConnector> logger, ActiveCloudRequestTracker? requestTracker = null)
     {
@@ -60,6 +62,16 @@ public class SyncRootConnector : IDisposable
             {
                 Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_CANCEL_FETCH_DATA,
                 Callback = OnCancelFetchData
+            },
+            new()
+            {
+                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_FILE_OPEN_COMPLETION,
+                Callback = OnFileOpenCompletion
+            },
+            new()
+            {
+                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_FILE_CLOSE_COMPLETION,
+                Callback = OnFileCloseCompletion
             },
             CF_CALLBACK_REGISTRATION.CF_CALLBACK_REGISTRATION_END
         };
@@ -180,6 +192,44 @@ public class SyncRootConnector : IDisposable
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in CANCEL_FETCH_DATA handler");
+            }
+        });
+    }
+
+    private void OnFileOpenCompletion(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
+    {
+        _logger.LogDebug("NOTIFY_FILE_OPEN_COMPLETION callback: {Path}", callbackInfo.NormalizedPath);
+        var info = callbackInfo;
+        var parms = callbackParameters;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (FileOpenCompleted != null)
+                    await FileOpenCompleted(info, parms);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error in NOTIFY_FILE_OPEN_COMPLETION handler for {Path}", info.NormalizedPath);
+            }
+        });
+    }
+
+    private void OnFileCloseCompletion(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
+    {
+        _logger.LogDebug("NOTIFY_FILE_CLOSE_COMPLETION callback: {Path}", callbackInfo.NormalizedPath);
+        var info = callbackInfo;
+        var parms = callbackParameters;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (FileCloseCompleted != null)
+                    await FileCloseCompleted(info, parms);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error in NOTIFY_FILE_CLOSE_COMPLETION handler for {Path}", info.NormalizedPath);
             }
         });
     }

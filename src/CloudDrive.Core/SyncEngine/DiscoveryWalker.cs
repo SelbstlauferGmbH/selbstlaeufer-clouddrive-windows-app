@@ -32,9 +32,17 @@ public sealed class DiscoveryWalker
     {
         ct.ThrowIfCancellationRequested();
         var remoteDirectoryPath = _pathMapper.ToRemotePath(localDirectoryPath);
-        var localEntries = await _vfs.EnumerateChildrenAsync(localDirectoryPath, depth, ct);
-        var remoteItems = await ListRemoteItemsAsync(remoteDirectoryPath, depth, ct);
-        var journalChildren = GetJournalRecords(localDirectoryPath, depth);
+        var localEntries = (await _vfs.EnumerateChildrenAsync(localDirectoryPath, depth, ct))
+            .Where(entry => !TransientFilePolicy.ShouldIgnoreLocalPath(entry.LocalPath, entry.IsDirectory))
+            .ToList();
+        var remoteItems = (await ListRemoteItemsAsync(remoteDirectoryPath, depth, ct))
+            .Where(item => !TransientFilePolicy.ShouldIgnoreRemotePath(item.RemotePath, item.IsDirectory))
+            .ToList();
+        var journalChildren = GetJournalRecords(localDirectoryPath, depth)
+            .Where(record =>
+                !TransientFilePolicy.ShouldIgnoreLocalPath(record.LocalPath, record.IsDirectory) &&
+                !TransientFilePolicy.ShouldIgnoreRemotePath(record.RemotePath, record.IsDirectory))
+            .ToList();
 
         var actions = new List<ReconcileAction>();
         var localByPath = localEntries.ToDictionary(e => e.LocalPath, StringComparer.OrdinalIgnoreCase);

@@ -38,6 +38,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _maxConcurrentTransfers = 4;
     [ObservableProperty] private AuthType _authType = AuthType.Basic;
     [ObservableProperty] private bool _enableFileLogging;
+    [ObservableProperty] private bool _enableWebDavLocking = true;
     [ObservableProperty] private bool _showNotifications = true;
     [ObservableProperty] private bool _launchOnStartup = true;
     [ObservableProperty] private string _themeMode = "System";
@@ -250,6 +251,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         MaxConcurrentTransfers = settings.MaxConcurrentTransfers;
         AuthType = AuthType.Basic;
         EnableFileLogging = settings.EnableFileLogging;
+        EnableWebDavLocking = settings.EnableWebDavLocking;
         ShowNotifications = settings.ShowNotifications;
         LaunchOnStartup = settings.LaunchOnStartup;
         ThemeMode = settings.ThemeMode;
@@ -612,6 +614,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         settings.AuthType = AuthType.Basic;
         AuthType = AuthType.Basic;
         settings.EnableFileLogging = EnableFileLogging;
+        settings.EnableWebDavLocking = EnableWebDavLocking;
         settings.ShowNotifications = ShowNotifications;
         settings.LaunchOnStartup = LaunchOnStartup;
         settings.ThemeMode = ThemeMode;
@@ -629,6 +632,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (_dashboardContext.EnsureWatchdogScheduledTaskAsync != null)
             await _dashboardContext.EnsureWatchdogScheduledTaskAsync();
+
+        _dashboardContext.SetWebDavLockingEnabled?.Invoke(EnableWebDavLocking);
 
         StatusMessage = AppLocalizer.Instance.GetString("Settings_Status_SettingsSaved");
         OnPropertyChanged(nameof(AccountDisplay));

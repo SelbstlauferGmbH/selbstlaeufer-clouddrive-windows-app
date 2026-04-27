@@ -393,6 +393,12 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Section_Advanced_FileLoggingDescription" xml:space="preserve">
     <value>Ausführliche Diagnoseprotokolle im lokalen AppData-Ordner schreiben.</value>
   </data>
+  <data name="Section_Advanced_EnableWebDavLocking" xml:space="preserve">
+    <value>WebDAV-Server-Sperren verwenden</value>
+  </data>
+  <data name="Section_Advanced_WebDavLockingDescription" xml:space="preserve">
+    <value>Verwendet LOCK- und UNLOCK-Token, damit kompatible WebDAV-Server parallele Office-Bearbeitung und geschützte Schreibvorgänge verhindern können.</value>
+  </data>
   <data name="Section_Advanced_ForceCrash" xml:space="preserve">
     <value>Absturz erzwingen</value>
   </data>
@@ -1065,6 +1071,15 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_Upload_SummarySuffix" xml:space="preserve">
     <value>{0} Bitte prüfen Sie die Details und versuchen Sie es erneut.</value>
   </data>
+  <data name="Problem_RemoteLock_Title" xml:space="preserve">
+    <value>{0} ist auf dem Server gesperrt</value>
+  </data>
+  <data name="Problem_RemoteLock_Summary" xml:space="preserve">
+    <value>Ein anderer WebDAV-Client scheint diese Datei zu bearbeiten. CloudDrive versucht es erneut.</value>
+  </data>
+  <data name="Problem_RemoteLock_Detail" xml:space="preserve">
+    <value>Der WebDAV-Server hat den Zugriff verweigert, weil {0} gesperrt ist.</value>
+  </data>
   <data name="Problem_Kind_Conflict" xml:space="preserve">
     <value>Konflikt</value>
   </data>
@@ -1079,6 +1094,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Problem_Kind_DownloadError" xml:space="preserve">
     <value>Downloadfehler</value>
+  </data>
+  <data name="Problem_Kind_RemoteLock" xml:space="preserve">
+    <value>Server-Sperre</value>
   </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>

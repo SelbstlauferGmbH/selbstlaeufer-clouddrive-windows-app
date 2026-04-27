@@ -441,7 +441,8 @@ public partial class App : System.Windows.Application
             TogglePauseResume,
             EnsureWatchdogScheduledTaskAsync,
             () => updateService.CheckForUpdatesNowAsync(),
-            _appStartedAt);
+            _appStartedAt,
+            enabled => GetSyncService()?.Coordinator?.SetWebDavLockingEnabled(enabled));
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()

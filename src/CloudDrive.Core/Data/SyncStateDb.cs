@@ -623,7 +623,17 @@ public class SyncStateDb : IDisposable
                     SELECT id FROM propagator_jobs
                     WHERE status IN (@pendingStatus, @leasedStatus, @failedStatus)
                       AND (lease_until_utc IS NULL OR lease_until_utc < @now)
-                    ORDER BY created_at, id
+                    ORDER BY
+                        CASE job_type
+                            WHEN 0 THEN 0 -- UploadNew
+                            WHEN 1 THEN 0 -- UploadChanged
+                            WHEN 4 THEN 1 -- MoveRemote
+                            WHEN 6 THEN 1 -- DeleteRemote
+                            WHEN 8 THEN 2 -- Conflict
+                            ELSE 3
+                        END,
+                        created_at,
+                        id
                     LIMIT @limit
                     """;
                 select.Parameters.AddWithValue("@pendingStatus", (int)PropagatorJobStatus.Pending);
@@ -677,6 +687,27 @@ public class SyncStateDb : IDisposable
     public void CompletePropagatorJob(string operationId)
     {
         UpdatePropagatorJobStatus(operationId, PropagatorJobStatus.Completed, null);
+    }
+
+    public void DeferPropagatorJob(string operationId, TimeSpan delay, string error)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                UPDATE propagator_jobs
+                SET status = @status,
+                    lease_until_utc = @leaseUntil,
+                    last_error = @lastError,
+                    updated_at = datetime('now')
+                WHERE operation_id = @operationId
+                """;
+            cmd.Parameters.AddWithValue("@status", (int)PropagatorJobStatus.Failed);
+            cmd.Parameters.AddWithValue("@leaseUntil", DateTime.UtcNow.Add(delay).ToString("o"));
+            cmd.Parameters.AddWithValue("@lastError", error);
+            cmd.Parameters.AddWithValue("@operationId", operationId);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void FailPropagatorJob(string operationId, string error)

@@ -91,6 +91,148 @@ public sealed class PropagatorTests
         journal.GetByFileId("legacy-file-id")?.LocalPath.ShouldBe(newLocalPath);
     }
 
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task DownloadNew_File_CreatesDehydratedPlaceholderWithoutReadingContent()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "remote.docx");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        webDav.AddFile("/remote.docx", "remote content", "etag-1");
+        var remote = await webDav.GetPropertiesAsync("/remote.docx");
+        remote.ShouldNotBeNull();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.DownloadNew,
+            localPath,
+            "/remote.docx",
+            "file-1",
+            Local: null,
+            Journal: null,
+            Remote: remote), CancellationToken.None);
+
+        File.Exists(localPath).ShouldBeFalse();
+        File.Exists(localPath + SuffixVfs.PlaceholderSuffix).ShouldBeTrue();
+
+        var placeholder = await vfs.GetPlaceholderInfoAsync(localPath, CancellationToken.None);
+        placeholder.ShouldNotBeNull();
+        placeholder.HydrationState.ShouldBe(VfsHydrationState.Dehydrated);
+        placeholder.InSync.ShouldBeTrue();
+
+        var record = journal.GetByFileId("file-1");
+        record.ShouldNotBeNull();
+        record.Checksum.ShouldBeNull();
+        stateService.GetByLocalPath(localPath)?.SyncStatus.ShouldBe(SyncStatus.Synced);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task UploadNew_File_UploadsOnlyAfterLocalFileIsAccessible()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "report.docx");
+        await File.WriteAllTextAsync(localPath, "content");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        using var locked = new FileStream(localPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        await Should.ThrowAsync<LocalFileTemporarilyUnavailableException>(() =>
+            propagator.ApplyAsync(new ReconcileAction(
+                ReconcileActionType.UploadNew,
+                localPath,
+                "/report.docx",
+                "file-1",
+                Local: null,
+                Journal: null,
+                Remote: null), CancellationToken.None));
+
+        (await webDav.GetPropertiesAsync("/report.docx")).ShouldBeNull();
+        journal.GetByRemotePath("/report.docx").ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task UploadNew_File_IgnoresOfficeOwnerFile()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "~$report.docx");
+        await File.WriteAllTextAsync(localPath, "owner");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.UploadNew,
+            localPath,
+            "/~$report.docx",
+            "file-1",
+            Local: null,
+            Journal: null,
+            Remote: null), CancellationToken.None);
+
+        (await webDav.GetPropertiesAsync("/~$report.docx")).ShouldBeNull();
+        journal.GetByRemotePath("/~$report.docx").ShouldBeNull();
+        stateService.GetByLocalPath(localPath).ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task UploadNew_WhenJournalAlreadyHasRemotePath_ReusesExistingRecord()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "report.docx");
+        await File.WriteAllTextAsync(localPath, "content");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "existing-file-id",
+            LocalPath = localPath,
+            RemotePath = "/report.docx",
+            ETag = "etag-old",
+            Size = 3,
+            InSync = true
+        });
+
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.UploadNew,
+            localPath,
+            "/report.docx",
+            "new-file-id",
+            Local: null,
+            Journal: null,
+            Remote: null), CancellationToken.None);
+
+        journal.GetByFileId("new-file-id").ShouldBeNull();
+        var record = journal.GetByFileId("existing-file-id");
+        record.ShouldNotBeNull();
+        record.RemotePath.ShouldBe("/report.docx");
+        record.Size.ShouldBe(new FileInfo(localPath).Length);
+        stateService.GetByLocalPath(localPath)?.SyncStatus.ShouldBe(SyncStatus.Synced);
+    }
+
     private static Propagator CreatePropagator(
         IVfs vfs,
         SyncJournal journal,

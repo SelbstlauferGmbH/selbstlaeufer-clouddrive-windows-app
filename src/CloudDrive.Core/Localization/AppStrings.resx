@@ -393,6 +393,12 @@ Do you want to restart CloudDrive now?</value>
   <data name="Section_Advanced_FileLoggingDescription" xml:space="preserve">
     <value>Write detailed diagnostic logs to the local app data folder.</value>
   </data>
+  <data name="Section_Advanced_EnableWebDavLocking" xml:space="preserve">
+    <value>Use WebDAV server locks</value>
+  </data>
+  <data name="Section_Advanced_WebDavLockingDescription" xml:space="preserve">
+    <value>Use LOCK and UNLOCK tokens so compatible WebDAV servers can prevent concurrent Office edits and protected writes.</value>
+  </data>
   <data name="Section_Advanced_ForceCrash" xml:space="preserve">
     <value>Force crash</value>
   </data>
@@ -1065,6 +1071,15 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_Upload_SummarySuffix" xml:space="preserve">
     <value>{0} Please review the details and try again.</value>
   </data>
+  <data name="Problem_RemoteLock_Title" xml:space="preserve">
+    <value>{0} is locked on the server</value>
+  </data>
+  <data name="Problem_RemoteLock_Summary" xml:space="preserve">
+    <value>Another WebDAV client appears to be editing this file. CloudDrive will retry.</value>
+  </data>
+  <data name="Problem_RemoteLock_Detail" xml:space="preserve">
+    <value>The WebDAV server refused access because {0} is locked.</value>
+  </data>
   <data name="Problem_Kind_Conflict" xml:space="preserve">
     <value>Conflict</value>
   </data>
@@ -1079,6 +1094,9 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Problem_Kind_DownloadError" xml:space="preserve">
     <value>Download error</value>
+  </data>
+  <data name="Problem_Kind_RemoteLock" xml:space="preserve">
+    <value>Server lock</value>
   </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>

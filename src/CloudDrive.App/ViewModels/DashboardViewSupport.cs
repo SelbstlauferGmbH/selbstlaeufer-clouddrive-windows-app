@@ -35,7 +35,8 @@ public sealed class AppDashboardContext
         Action togglePauseResume,
         Func<Task>? ensureWatchdogScheduledTaskAsync,
         Func<Task>? checkForUpdatesNowAsync,
-        DateTime startedAt)
+        DateTime startedAt,
+        Action<bool>? setWebDavLockingEnabled = null)
     {
         ActivityTracker = activityTracker;
         Database = database;
@@ -52,6 +53,7 @@ public sealed class AppDashboardContext
         EnsureWatchdogScheduledTaskAsync = ensureWatchdogScheduledTaskAsync;
         CheckForUpdatesNowAsync = checkForUpdatesNowAsync;
         StartedAt = startedAt;
+        SetWebDavLockingEnabled = setWebDavLockingEnabled;
     }
 
     public IActivityTracker ActivityTracker { get; }
@@ -69,6 +71,7 @@ public sealed class AppDashboardContext
     public Func<Task>? EnsureWatchdogScheduledTaskAsync { get; }
     public Func<Task>? CheckForUpdatesNowAsync { get; }
     public DateTime StartedAt { get; }
+    public Action<bool>? SetWebDavLockingEnabled { get; }
 }
 
 public enum SettingsSection
@@ -1004,6 +1007,7 @@ public static class DashboardBuilder
             {
                 SyncProblemType.Conflict => L("Problem_Kind_Conflict"),
                 SyncProblemType.Connection => L("Problem_Kind_Connection"),
+                SyncProblemType.RemoteLock => L("Problem_Kind_RemoteLock"),
                 SyncProblemType.RemoteListing or SyncProblemType.RemoteSync => L("Problem_Kind_SyncError"),
                 SyncProblemType.Upload => L("Problem_Kind_UploadError"),
                 SyncProblemType.Download => L("Problem_Kind_DownloadError"),
@@ -1342,6 +1346,10 @@ public static class DashboardBuilder
             SyncProblemType.Connection => (
                 L("Problem_ConnectionLost_Title"),
                 L("Problem_ConnectionLost_Summary"),
+                problem.Details),
+            SyncProblemType.RemoteLock => (
+                problem.Title,
+                problem.Summary,
                 problem.Details),
             SyncProblemType.RemoteListing => (
                 L("Problem_RemoteFolder_Title"),

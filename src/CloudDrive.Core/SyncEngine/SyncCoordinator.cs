@@ -37,6 +37,7 @@ public class SyncCoordinator : IDisposable
     private readonly PathMapper _pathMapper;
     private readonly ExplorerWindowMonitor _explorerWindowMonitor;
     private readonly ActiveCloudRequestTracker _activeCloudRequestTracker;
+    private readonly WebDavLockCoordinator _webDavLockCoordinator;
 
     private CancellationTokenSource? _cts;
     private Task? _uploadTask;
@@ -112,6 +113,12 @@ public class SyncCoordinator : IDisposable
             _pathMapper.ToRemotePath);
         _propagatorQueue = new PropagatorQueue(_db);
         _explorerItemStateService = new ExplorerItemStateService(loggerFactory.CreateLogger<ExplorerItemStateService>());
+        _webDavLockCoordinator = new WebDavLockCoordinator(
+            settings.EnableWebDavLocking,
+            webDav,
+            _pathMapper,
+            _problemService,
+            loggerFactory.CreateLogger<WebDavLockCoordinator>());
         _propagator = new Propagator(
             _vfs,
             _journal,
@@ -119,7 +126,8 @@ public class SyncCoordinator : IDisposable
             _problemService,
             loggerFactory.CreateLogger<Propagator>(),
             _stateService,
-            _explorerItemStateService);
+            _explorerItemStateService,
+            _webDavLockCoordinator);
         _placeholderManager = new PlaceholderManager(webDav, _stateService, _pathMapper, loggerFactory.CreateLogger<PlaceholderManager>());
         _projectionService = new SyncProjectionService(_placeholderManager, _stateService, cloudFileOperations, loggerFactory.CreateLogger<SyncProjectionService>());
         _hydrationHandler = new HydrationHandler(webDav, _stateService, _pathMapper, _projectionService, loggerFactory.CreateLogger<HydrationHandler>(), _activeCloudRequestTracker);
@@ -149,6 +157,8 @@ public class SyncCoordinator : IDisposable
         _connector.FetchPlaceholdersRequested += _placeholderManager.HandleFetchPlaceholdersAsync;
         _connector.FetchDataRequested += _hydrationHandler.HandleFetchDataAsync;
         _connector.CancelFetchDataRequested += _hydrationHandler.HandleCancelFetchDataAsync;
+        _connector.FileOpenCompleted += HandleFileOpenCompletedAsync;
+        _connector.FileCloseCompleted += HandleFileCloseCompletedAsync;
     }
 
     /// <summary>
@@ -166,6 +176,18 @@ public class SyncCoordinator : IDisposable
     {
         _explorerStatusManager = manager;
     }
+
+    public void SetWebDavLockingEnabled(bool enabled)
+    {
+        _settings.EnableWebDavLocking = enabled;
+        _webDavLockCoordinator.SetEnabled(enabled);
+    }
+
+    private Task HandleFileOpenCompletedAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters) =>
+        _webDavLockCoordinator.HandleFileOpenAsync(callbackInfo.NormalizedPath);
+
+    private Task HandleFileCloseCompletedAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters) =>
+        _webDavLockCoordinator.HandleFileCloseAsync(callbackInfo.NormalizedPath);
 
     /// <summary>
     /// Register sync root and connect cfapi callbacks.
@@ -260,6 +282,16 @@ public class SyncCoordinator : IDisposable
         catch (OperationCanceledException) { }
 
         // Signal shutdown to Windows before disconnecting
+        try
+        {
+            using var releaseLocksCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await _webDavLockCoordinator.ReleaseAllAsync(releaseLocksCts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Timed out or failed while releasing WebDAV locks during shutdown");
+        }
+
         _connector.UpdateSyncProviderStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_DISCONNECTED);
 
         _connector.Disconnect();
@@ -486,6 +518,12 @@ public class SyncCoordinator : IDisposable
 
     private ReconcileAction? BuildLocalReconcileAction(FileChangeEvent change)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(change.FullPath))
+        {
+            _logger.LogDebug("Ignoring transient local change during reconciliation: {Path}", change.FullPath);
+            return null;
+        }
+
         return change.ChangeType switch
         {
             FileChangeType.Created or FileChangeType.Changed => BuildUploadAction(change.FullPath),
@@ -497,6 +535,12 @@ public class SyncCoordinator : IDisposable
 
     private ReconcileAction? BuildUploadAction(string localPath)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath, Directory.Exists(localPath)))
+        {
+            _logger.LogDebug("Ignoring transient local upload candidate: {Path}", localPath);
+            return null;
+        }
+
         if (!File.Exists(localPath) && !Directory.Exists(localPath))
             return null;
 
@@ -520,6 +564,12 @@ public class SyncCoordinator : IDisposable
 
     private ReconcileAction? BuildDeleteRemoteAction(string localPath)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath))
+        {
+            _logger.LogDebug("Ignoring transient local delete candidate: {Path}", localPath);
+            return null;
+        }
+
         var journalRecord = _journal.GetByLocalPath(localPath);
         var syncItem = _stateService.GetByLocalPath(localPath);
         if (journalRecord == null && syncItem == null)
@@ -537,6 +587,30 @@ public class SyncCoordinator : IDisposable
 
     private ReconcileAction? BuildMoveRemoteAction(string newPath, string? oldPath)
     {
+        var newIsTransient = TransientFilePolicy.ShouldIgnoreLocalPath(newPath, Directory.Exists(newPath));
+        var oldIsTransient = !string.IsNullOrWhiteSpace(oldPath) &&
+                             TransientFilePolicy.ShouldIgnoreLocalPath(oldPath);
+        var oldIsProviderInternal = !string.IsNullOrWhiteSpace(oldPath) &&
+                                    TransientFilePolicy.IsProviderInternalLocalPath(oldPath);
+
+        if (newIsTransient)
+        {
+            _logger.LogDebug("Ignoring transient local move target: {OldPath} -> {NewPath}", oldPath, newPath);
+            return null;
+        }
+
+        if (oldIsProviderInternal)
+        {
+            _logger.LogDebug("Ignoring provider-owned local move: {OldPath} -> {NewPath}", oldPath, newPath);
+            return null;
+        }
+
+        if (oldIsTransient)
+        {
+            _logger.LogDebug("Treating transient-to-durable rename as upload: {OldPath} -> {NewPath}", oldPath, newPath);
+            return BuildUploadAction(newPath);
+        }
+
         if (string.IsNullOrWhiteSpace(oldPath))
             return BuildUploadAction(newPath);
 
@@ -663,6 +737,36 @@ public class SyncCoordinator : IDisposable
                     {
                         throw;
                     }
+                    catch (LocalFileTemporarilyUnavailableException ex)
+                    {
+                        var delay = GetLocalFileRetryDelay(job.AttemptCount);
+                        _logger.LogInformation(
+                            ex,
+                            "Deferring propagator job until the local file is available: {OperationId} {Type} {Path} DelaySeconds={DelaySeconds}",
+                            job.OperationId,
+                            job.JobType,
+                            job.LocalPath,
+                            delay.TotalSeconds);
+                        _propagatorQueue.Defer(job.OperationId, delay, ex.Message);
+                        CurrentState = SyncState.Syncing;
+                        StateChanged?.Invoke(SyncState.Syncing);
+                    }
+                    catch (WebDavLockedException ex)
+                    {
+                        var delay = GetRemoteLockRetryDelay(job.AttemptCount);
+                        ReportRemoteLockProblem(job.LocalPath, ex.RemotePath, ex.Message);
+                        _logger.LogWarning(
+                            ex,
+                            "Deferring propagator job because the WebDAV resource is locked: {OperationId} {Type} {Path} RemotePath={RemotePath} DelaySeconds={DelaySeconds}",
+                            job.OperationId,
+                            job.JobType,
+                            job.LocalPath,
+                            ex.RemotePath,
+                            delay.TotalSeconds);
+                        _propagatorQueue.Defer(job.OperationId, delay, ex.Message);
+                        CurrentState = SyncState.Syncing;
+                        StateChanged?.Invoke(SyncState.Syncing);
+                    }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Propagator job failed: {OperationId} {Type} {Path}", job.OperationId, job.JobType, job.LocalPath);
@@ -689,6 +793,42 @@ public class SyncCoordinator : IDisposable
                 catch (OperationCanceledException) { break; }
             }
         }
+    }
+
+    private static TimeSpan GetLocalFileRetryDelay(int attemptCount)
+    {
+        var seconds = Math.Min(60, Math.Max(5, attemptCount * 5));
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private static TimeSpan GetRemoteLockRetryDelay(int attemptCount)
+    {
+        var seconds = Math.Min(120, Math.Max(15, attemptCount * 15));
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private void ReportRemoteLockProblem(string localPath, string remotePath, string detail)
+    {
+        var localizer = AppLocalizer.Instance;
+        var fileName = Path.GetFileName(localPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = remotePath;
+
+        _problemService.Report(new SyncProblem
+        {
+            DedupeKey = SyncProblemKeys.Lock(remotePath),
+            ProblemType = SyncProblemType.RemoteLock,
+            Severity = SyncProblemSeverity.Warning,
+            Title = localizer.Format("Problem_RemoteLock_Title", fileName),
+            Summary = localizer.GetString("Problem_RemoteLock_Summary"),
+            Details = string.IsNullOrWhiteSpace(detail)
+                ? localizer.Format("Problem_RemoteLock_Detail", remotePath)
+                : detail,
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            FirstOccurredAt = DateTime.UtcNow,
+            LastOccurredAt = DateTime.UtcNow
+        });
     }
 
     private async Task PollRemoteChangesAsync(CancellationToken ct)
@@ -892,6 +1032,7 @@ public class SyncCoordinator : IDisposable
         _reconnectCts?.Cancel();
         _cts?.Cancel();
         _changeWatcher?.Dispose();
+        _webDavLockCoordinator.Dispose();
         _connector.Dispose();
         _db.Dispose();
         _reconnectCts?.Dispose();

@@ -63,4 +63,10 @@ public class AppSettingsConfigurationTests
         status.HasPassword.ShouldBeFalse();
         status.IsComplete.ShouldBeFalse();
     }
+
+    [Fact]
+    public void Defaults_EnableWebDavLocking()
+    {
+        new AppSettings().EnableWebDavLocking.ShouldBeTrue();
+    }
 }

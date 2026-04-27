@@ -69,6 +69,60 @@ public class PropagatorQueueTests
 
     [Fact]
     [Trait("Category", "SyncEngine")]
+    public void DeferredLease_IsNotLeasedUntilDelayExpires()
+    {
+        using var tempDir = new TempDirectory();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var queue = new PropagatorQueue(db);
+
+        var action = new ReconcileAction(
+            ReconcileActionType.UploadNew,
+            Path.Combine(tempDir.Path, "file.txt"),
+            "/file.txt",
+            "file-1",
+            Local: null,
+            Journal: null,
+            Remote: null);
+
+        var enqueued = queue.Enqueue(action);
+        queue.Defer(enqueued.OperationId, TimeSpan.FromSeconds(30), "file locked");
+
+        queue.Lease(limit: 1, leaseDuration: TimeSpan.FromMinutes(5)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public void Lease_PrioritizesLocalMutationsOverRemoteDownloads()
+    {
+        using var tempDir = new TempDirectory();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var queue = new PropagatorQueue(db);
+
+        queue.Enqueue(new ReconcileAction(
+            ReconcileActionType.DownloadNew,
+            Path.Combine(tempDir.Path, "remote.txt"),
+            "/remote.txt",
+            "remote-file",
+            Local: null,
+            Journal: null,
+            Remote: null));
+
+        queue.Enqueue(new ReconcileAction(
+            ReconcileActionType.UploadNew,
+            Path.Combine(tempDir.Path, "local.txt"),
+            "/local.txt",
+            "local-file",
+            Local: null,
+            Journal: null,
+            Remote: null));
+
+        var leased = queue.Lease(limit: 1, leaseDuration: TimeSpan.FromMinutes(5));
+
+        leased.Single().JobType.ShouldBe(PropagatorJobType.UploadNew);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
     public void CompletedOperation_CanBeQueuedAgainForLaterChanges()
     {
         using var tempDir = new TempDirectory();

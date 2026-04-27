@@ -75,6 +75,12 @@ public class UploadManager
 
     private async Task HandleCreateOrChangeAsync(string localPath, CancellationToken ct)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath, Directory.Exists(localPath)))
+        {
+            _logger.LogDebug("Skipping transient local upload candidate: {Path}", localPath);
+            return;
+        }
+
         var remotePath = _pathMapper.ToRemotePath(localPath);
 
         if (Directory.Exists(localPath))
@@ -121,7 +127,13 @@ public class UploadManager
         if (!string.IsNullOrEmpty(parentRemote))
             await _webDav.CreateDirectoryAsync(parentRemote, ct);
 
-        using var fileStream = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var fileStream = new FileStream(
+            localPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete,
+            81920,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
         var etag = await _webDav.UploadFileAsync(remotePath, fileStream, ct);
 
         var fileInfo = new FileInfo(localPath);
@@ -148,6 +160,12 @@ public class UploadManager
 
     private async Task HandleDeleteAsync(string localPath, CancellationToken ct)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath))
+        {
+            _logger.LogDebug("Skipping transient local delete: {Path}", localPath);
+            return;
+        }
+
         var item = _stateService.GetByLocalPath(localPath);
         if (item == null) return;
 
@@ -170,6 +188,29 @@ public class UploadManager
 
     private async Task HandleRenameAsync(string newPath, string oldPath, CancellationToken ct)
     {
+        var newIsTransient = TransientFilePolicy.ShouldIgnoreLocalPath(newPath, Directory.Exists(newPath));
+        var oldIsTransient = TransientFilePolicy.ShouldIgnoreLocalPath(oldPath);
+        var oldIsProviderInternal = TransientFilePolicy.IsProviderInternalLocalPath(oldPath);
+
+        if (newIsTransient)
+        {
+            _logger.LogDebug("Skipping transient local rename target: {OldPath} -> {NewPath}", oldPath, newPath);
+            return;
+        }
+
+        if (oldIsProviderInternal)
+        {
+            _logger.LogDebug("Skipping provider-owned local rename: {OldPath} -> {NewPath}", oldPath, newPath);
+            return;
+        }
+
+        if (oldIsTransient)
+        {
+            _logger.LogDebug("Treating transient-to-durable rename as upload: {OldPath} -> {NewPath}", oldPath, newPath);
+            await HandleCreateOrChangeAsync(newPath, ct);
+            return;
+        }
+
         var newRemotePath = _pathMapper.ToRemotePath(newPath);
         var item = _stateService.GetByLocalPath(oldPath);
         if (item == null)

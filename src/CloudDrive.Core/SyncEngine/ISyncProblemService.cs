@@ -18,6 +18,8 @@ public static class SyncProblemKeys
 
     public static string Conflict(string localPath) => $"conflict:{localPath}";
 
+    public static string Lock(string remotePath) => $"lock:{remotePath}";
+
     public static string RemoteListing(string remotePath) => $"remote-listing:{remotePath}";
 
     public static string RemoteSync() => "remote-sync";
