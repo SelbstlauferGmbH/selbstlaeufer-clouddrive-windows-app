@@ -14,6 +14,10 @@
     <ApplicationIcon>..\..\assets\app_icons\selbstlaeufer-cloud-app-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CloudDrive.Core\CloudDrive.Core.csproj" />
   </ItemGroup>
