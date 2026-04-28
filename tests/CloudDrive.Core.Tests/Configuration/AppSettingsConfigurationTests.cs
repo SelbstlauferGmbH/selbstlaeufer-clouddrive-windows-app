@@ -64,9 +64,4 @@ public class AppSettingsConfigurationTests
         status.IsComplete.ShouldBeFalse();
     }
 
-    [Fact]
-    public void Defaults_EnableWebDavLocking()
-    {
-        new AppSettings().EnableWebDavLocking.ShouldBeTrue();
-    }
 }

@@ -393,12 +393,6 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Section_Advanced_FileLoggingDescription" xml:space="preserve">
     <value>Ausführliche Diagnoseprotokolle im lokalen AppData-Ordner schreiben.</value>
   </data>
-  <data name="Section_Advanced_EnableWebDavLocking" xml:space="preserve">
-    <value>WebDAV-Server-Sperren verwenden</value>
-  </data>
-  <data name="Section_Advanced_WebDavLockingDescription" xml:space="preserve">
-    <value>Verwendet LOCK- und UNLOCK-Token, damit kompatible WebDAV-Server parallele Office-Bearbeitung und geschützte Schreibvorgänge verhindern können.</value>
-  </data>
   <data name="Section_Advanced_ForceCrash" xml:space="preserve">
     <value>Absturz erzwingen</value>
   </data>
@@ -476,6 +470,18 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Activity_CloudDriveReady" xml:space="preserve">
     <value>CloudDrive ist bereit</value>
+  </data>
+  <data name="Activity_WebDavLockingAvailable" xml:space="preserve">
+    <value>WebDAV-Server-Sperren sind verfügbar</value>
+  </data>
+  <data name="Activity_WebDavLockingUnavailable" xml:space="preserve">
+    <value>WebDAV-Server-Sperren sind nicht verfügbar</value>
+  </data>
+  <data name="Activity_WebDavLockingProbeFailed" xml:space="preserve">
+    <value>Prüfung der WebDAV-Server-Sperren fehlgeschlagen</value>
+  </data>
+  <data name="Activity_WebDavLockingNotChecked" xml:space="preserve">
+    <value>WebDAV-Server-Sperren wurden nicht geprüft</value>
   </data>
   <data name="Activity_Deleting" xml:space="preserve">
     <value>{0} wird gelöscht</value>
@@ -818,6 +824,30 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="HealthCheck_WebDav_Name" xml:space="preserve">
     <value>WebDAV-Verbindung</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Name" xml:space="preserve">
+    <value>WebDAV-Server-Sperren</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Available" xml:space="preserve">
+    <value>Verfügbar</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Unavailable" xml:space="preserve">
+    <value>Nicht verfügbar</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_ProbeFailed" xml:space="preserve">
+    <value>Prüfung fehlgeschlagen</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Available" xml:space="preserve">
+    <value>Der Server hat einen WebDAV-LOCK und einen token-geschützten Probe-Schreibvorgang akzeptiert. CloudDrive verwendet Server-Sperren für Office-Dateien.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Unavailable" xml:space="preserve">
+    <value>Der Server konnte WebDAV-Sperren nicht nachweisen. CloudDrive synchronisiert normal ohne serverseitige Bearbeitungssperren.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_ProbeFailed" xml:space="preserve">
+    <value>CloudDrive konnte die WebDAV-Sperren-Prüfung nicht abschließen. Serverseitige Bearbeitungssperren sind für diese Sitzung deaktiviert.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_NotChecked" xml:space="preserve">
+    <value>WebDAV-Sperren wurden noch nicht geprüft.</value>
   </data>
   <data name="HealthCheck_Updater_Name" xml:space="preserve">
     <value>Updater</value>

@@ -2,6 +2,7 @@ using CloudDrive.Core.Data;
 using CloudDrive.Core.Helpers;
 using CloudDrive.Core.SyncEngine;
 using CloudDrive.Core.Tests.Fakes;
+using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 
@@ -55,13 +56,18 @@ public class WebDavLockCoordinatorTests : IDisposable
         coordinator.Dispose();
     }
 
-    private WebDavLockCoordinator CreateCoordinator(FakeWebDavService webDav, bool enabled) =>
-        new(
-            enabled,
+    private WebDavLockCoordinator CreateCoordinator(FakeWebDavService webDav, bool enabled)
+    {
+        var coordinator = new WebDavLockCoordinator(
             webDav,
             new PathMapper(_root, "/"),
             new NoOpProblemService(),
             NullLogger<WebDavLockCoordinator>.Instance);
+        coordinator.SetLockSupport(enabled
+            ? WebDavLockSupport.Supported("Test lock support")
+            : WebDavLockSupport.Unsupported("Test lock support disabled"));
+        return coordinator;
+    }
 
     public void Dispose()
     {

@@ -1,10 +1,14 @@
 namespace CloudDrive.Core.SyncEngine;
 
+using CloudDrive.Core.WebDav;
+
 public interface IWebDavLockCoordinator
 {
     bool IsEnabled { get; }
 
-    void SetEnabled(bool enabled);
+    WebDavLockSupport LockSupport { get; }
+
+    void SetLockSupport(WebDavLockSupport lockSupport);
 
     Task HandleFileOpenAsync(string localPath, CancellationToken ct = default);
 

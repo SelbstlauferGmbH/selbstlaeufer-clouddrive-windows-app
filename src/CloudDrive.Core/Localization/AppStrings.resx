@@ -393,12 +393,6 @@ Do you want to restart CloudDrive now?</value>
   <data name="Section_Advanced_FileLoggingDescription" xml:space="preserve">
     <value>Write detailed diagnostic logs to the local app data folder.</value>
   </data>
-  <data name="Section_Advanced_EnableWebDavLocking" xml:space="preserve">
-    <value>Use WebDAV server locks</value>
-  </data>
-  <data name="Section_Advanced_WebDavLockingDescription" xml:space="preserve">
-    <value>Use LOCK and UNLOCK tokens so compatible WebDAV servers can prevent concurrent Office edits and protected writes.</value>
-  </data>
   <data name="Section_Advanced_ForceCrash" xml:space="preserve">
     <value>Force crash</value>
   </data>
@@ -476,6 +470,18 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Activity_CloudDriveReady" xml:space="preserve">
     <value>CloudDrive is ready</value>
+  </data>
+  <data name="Activity_WebDavLockingAvailable" xml:space="preserve">
+    <value>WebDAV server locking is available</value>
+  </data>
+  <data name="Activity_WebDavLockingUnavailable" xml:space="preserve">
+    <value>WebDAV server locking is unavailable</value>
+  </data>
+  <data name="Activity_WebDavLockingProbeFailed" xml:space="preserve">
+    <value>WebDAV server locking probe failed</value>
+  </data>
+  <data name="Activity_WebDavLockingNotChecked" xml:space="preserve">
+    <value>WebDAV server locking has not been checked</value>
   </data>
   <data name="Activity_Deleting" xml:space="preserve">
     <value>Deleting {0}</value>
@@ -818,6 +824,30 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="HealthCheck_WebDav_Name" xml:space="preserve">
     <value>WebDAV connection</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Name" xml:space="preserve">
+    <value>WebDAV server locking</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Available" xml:space="preserve">
+    <value>Available</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Unavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_ProbeFailed" xml:space="preserve">
+    <value>Probe failed</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Available" xml:space="preserve">
+    <value>The server accepted a WebDAV LOCK and a token-protected probe write, so CloudDrive will use server locks for Office files.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Unavailable" xml:space="preserve">
+    <value>The server did not prove WebDAV lock support. CloudDrive will sync normally without server-side edit locks.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_ProbeFailed" xml:space="preserve">
+    <value>CloudDrive could not complete the WebDAV lock probe. Server-side edit locks are disabled for this session.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_NotChecked" xml:space="preserve">
+    <value>WebDAV lock support has not been checked yet.</value>
   </data>
   <data name="HealthCheck_Updater_Name" xml:space="preserve">
     <value>Updater</value>

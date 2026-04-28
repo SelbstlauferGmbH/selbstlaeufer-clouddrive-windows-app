@@ -442,7 +442,14 @@ public partial class App : System.Windows.Application
             EnsureWatchdogScheduledTaskAsync,
             () => updateService.CheckForUpdatesNowAsync(),
             _appStartedAt,
-            enabled => GetSyncService()?.Coordinator?.SetWebDavLockingEnabled(enabled));
+            () => GetSyncService()?.WebDavLockSupport ?? WebDavLockSupport.NotChecked(),
+            async () =>
+            {
+                var service = GetSyncService();
+                return service == null
+                    ? WebDavLockSupport.NotChecked()
+                    : await service.RefreshWebDavLockSupportAsync();
+            });
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()

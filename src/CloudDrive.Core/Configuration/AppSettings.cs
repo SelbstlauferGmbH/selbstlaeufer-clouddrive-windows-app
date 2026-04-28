@@ -24,7 +24,6 @@ public class AppSettings
     public int SyncIntervalSeconds { get; set; } = 30;
     public int MaxConcurrentTransfers { get; set; } = 4;
     public bool EnableFileLogging { get; set; } = false;
-    public bool EnableWebDavLocking { get; set; } = true;
     public bool ShowNotifications { get; set; } = true;
     public bool LaunchOnStartup { get; set; } = true;
     public string ThemeMode { get; set; } = "System";

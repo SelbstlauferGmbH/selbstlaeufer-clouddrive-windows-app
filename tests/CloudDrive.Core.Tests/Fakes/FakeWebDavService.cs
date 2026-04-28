@@ -11,6 +11,8 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
     };
 
     public bool SyncCollectionSupported { get; set; } = true;
+    public WebDavLockSupport LockSupport { get; set; } =
+        WebDavLockSupport.Supported("Fake WebDAV lock support is enabled.");
 
     public int SyncCollectionReportCount { get; private set; }
     public int LockCount { get; private set; }
@@ -190,6 +192,12 @@ internal sealed class FakeWebDavService : ISyncCollectionWebDavService
         _lockTokens.Remove(remotePath);
         UnlockCount++;
         return Task.CompletedTask;
+    }
+
+    public Task<WebDavLockSupport> CheckLockSupportAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(LockSupport);
     }
 
     public Task CreateDirectoryAsync(string remotePath, CancellationToken ct = default)

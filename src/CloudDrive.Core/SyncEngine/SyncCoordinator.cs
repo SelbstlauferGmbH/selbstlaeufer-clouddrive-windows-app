@@ -114,7 +114,6 @@ public class SyncCoordinator : IDisposable
         _propagatorQueue = new PropagatorQueue(_db);
         _explorerItemStateService = new ExplorerItemStateService(loggerFactory.CreateLogger<ExplorerItemStateService>());
         _webDavLockCoordinator = new WebDavLockCoordinator(
-            settings.EnableWebDavLocking,
             webDav,
             _pathMapper,
             _problemService,
@@ -177,10 +176,11 @@ public class SyncCoordinator : IDisposable
         _explorerStatusManager = manager;
     }
 
-    public void SetWebDavLockingEnabled(bool enabled)
+    public WebDavLockSupport WebDavLockSupport => _webDavLockCoordinator.LockSupport;
+
+    public void SetWebDavLockSupport(WebDavLockSupport support)
     {
-        _settings.EnableWebDavLocking = enabled;
-        _webDavLockCoordinator.SetEnabled(enabled);
+        _webDavLockCoordinator.SetLockSupport(support);
     }
 
     private Task HandleFileOpenCompletedAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters) =>

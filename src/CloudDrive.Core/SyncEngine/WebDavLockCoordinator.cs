@@ -22,17 +22,16 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
     private readonly Dictionary<string, string> _remotePathByLocalPath = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _refreshCts = new();
     private readonly Task _refreshTask;
-    private volatile bool _enabled;
+    private WebDavLockSupport _lockSupport;
     private bool _disposed;
 
     public WebDavLockCoordinator(
-        bool enabled,
         IWebDavService webDav,
         PathMapper pathMapper,
         ISyncProblemService problemService,
         ILogger<WebDavLockCoordinator> logger)
     {
-        _enabled = enabled;
+        _lockSupport = WebDavLockSupport.NotChecked();
         _webDav = webDav;
         _pathMapper = pathMapper;
         _problemService = problemService;
@@ -40,17 +39,22 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
         _refreshTask = Task.Run(() => RefreshLoopAsync(_refreshCts.Token));
     }
 
-    public bool IsEnabled => _enabled;
+    public bool IsEnabled => _lockSupport.IsSupported;
 
-    public void SetEnabled(bool enabled)
+    public WebDavLockSupport LockSupport => _lockSupport;
+
+    public void SetLockSupport(WebDavLockSupport lockSupport)
     {
-        if (_enabled == enabled)
+        if (_lockSupport.State == lockSupport.State && _lockSupport.Detail == lockSupport.Detail)
             return;
 
-        _enabled = enabled;
-        _logger.LogInformation("WebDAV server locking {State}", enabled ? "enabled" : "disabled");
+        _lockSupport = lockSupport;
+        _logger.LogInformation(
+            "WebDAV server locking support: {State}. {Detail}",
+            lockSupport.State,
+            lockSupport.Detail);
 
-        if (!enabled)
+        if (!lockSupport.IsSupported)
             _ = Task.Run(() => ReleaseAllAsync(CancellationToken.None));
     }
 
@@ -114,7 +118,7 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
 
     public async Task HandleFileCloseAsync(string localPath, CancellationToken ct = default)
     {
-        if (!_enabled)
+        if (!IsEnabled)
             return;
 
         await _gate.WaitAsync(ct);
@@ -153,7 +157,7 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
 
     public async Task<WebDavWriteLock> AcquireWriteLockAsync(string localPath, string remotePath, CancellationToken ct = default)
     {
-        if (!_enabled)
+        if (!IsEnabled)
             return WebDavWriteLock.None;
 
         await _gate.WaitAsync(ct);
@@ -189,7 +193,7 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
 
     public async Task NotifyUploadSucceededAsync(string localPath, string remotePath, CancellationToken ct = default)
     {
-        if (!_enabled)
+        if (!IsEnabled)
             return;
 
         HeldLock? lockToRelease = null;
@@ -260,7 +264,7 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
 
     private bool ShouldAcquirePersistentLock(string localPath)
     {
-        if (!_enabled ||
+        if (!IsEnabled ||
             string.IsNullOrWhiteSpace(localPath) ||
             TransientFilePolicy.ShouldIgnoreLocalPath(localPath, Directory.Exists(localPath)) ||
             Directory.Exists(localPath))
@@ -302,7 +306,7 @@ public sealed class WebDavLockCoordinator : IWebDavLockCoordinator, IDisposable
         {
             foreach (var heldLock in _locksByRemotePath.Values)
             {
-                if (!_enabled || (heldLock.OpenCount == 0 && heldLock.ReleaseAfterUtc <= now))
+                if (!IsEnabled || (heldLock.OpenCount == 0 && heldLock.ReleaseAfterUtc <= now))
                 {
                     releaseCandidates.Add(heldLock);
                     continue;

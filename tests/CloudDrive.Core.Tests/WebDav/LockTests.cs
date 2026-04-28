@@ -78,4 +78,113 @@ public class LockTests
         capturedRequest!.Method.Method.ShouldBe("UNLOCK");
         capturedRequest.Headers.GetValues("Lock-Token").Single().ShouldBe("<opaquelocktoken:test>");
     }
+
+    [Fact]
+    public async Task CheckLockSupportAsync_WhenProbeSucceeds_ReturnsSupported()
+    {
+        var methods = new List<string>();
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync((HttpRequestMessage request, CancellationToken ct) =>
+            {
+                methods.Add(request.Method.Method);
+                if (request.Method.Method == "LOCK")
+                {
+                    var response = new HttpResponseMessage(HttpStatusCode.Created);
+                    response.Headers.TryAddWithoutValidation("Lock-Token", "<opaquelocktoken:probe>");
+                    return response;
+                }
+
+                if (request.Method.Method == "PUT")
+                {
+                    if (request.Headers.TryGetValues("If", out var ifHeaders))
+                    {
+                        ifHeaders.Single().ShouldBe("(<opaquelocktoken:probe>)");
+                        return new HttpResponseMessage(HttpStatusCode.NoContent);
+                    }
+
+                    return new HttpResponseMessage((HttpStatusCode)423);
+                }
+
+                if (request.Method.Method == "DELETE")
+                {
+                    request.Headers.GetValues("If").Single().ShouldBe("(<opaquelocktoken:probe>)");
+                    return new HttpResponseMessage(HttpStatusCode.NoContent);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+
+        using var service = CreateService(handlerMock.Object);
+
+        var support = await service.CheckLockSupportAsync();
+
+        support.State.ShouldBe(WebDavLockSupportState.Supported);
+        methods.ShouldBe(new[] { "LOCK", "PUT", "PUT", "DELETE", "UNLOCK" });
+    }
+
+    [Fact]
+    public async Task CheckLockSupportAsync_WhenUnprotectedWriteSucceeds_ReturnsUnsupported()
+    {
+        var methods = new List<string>();
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync((HttpRequestMessage request, CancellationToken ct) =>
+            {
+                methods.Add(request.Method.Method);
+                if (request.Method.Method == "LOCK")
+                {
+                    var response = new HttpResponseMessage(HttpStatusCode.Created);
+                    response.Headers.TryAddWithoutValidation("Lock-Token", "<opaquelocktoken:probe>");
+                    return response;
+                }
+
+                if (request.Method.Method == "PUT")
+                    return new HttpResponseMessage(HttpStatusCode.NoContent);
+
+                if (request.Method.Method == "DELETE")
+                {
+                    request.Headers.GetValues("If").Single().ShouldBe("(<opaquelocktoken:probe>)");
+                    return new HttpResponseMessage(HttpStatusCode.NoContent);
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            });
+
+        using var service = CreateService(handlerMock.Object);
+
+        var support = await service.CheckLockSupportAsync();
+
+        support.State.ShouldBe(WebDavLockSupportState.Unsupported);
+        methods.ShouldBe(new[] { "LOCK", "PUT", "PUT", "DELETE", "UNLOCK" });
+    }
+
+    [Fact]
+    public async Task CheckLockSupportAsync_WhenLockIsNotAllowed_ReturnsUnsupported()
+    {
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.MethodNotAllowed));
+
+        using var service = CreateService(handlerMock.Object);
+
+        var support = await service.CheckLockSupportAsync();
+
+        support.State.ShouldBe(WebDavLockSupportState.Unsupported);
+    }
 }

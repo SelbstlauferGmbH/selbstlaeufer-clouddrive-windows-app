@@ -26,6 +26,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private IReadOnlyList<ActivityDisplayItem> _allActivityItems = [];
     private IReadOnlyList<ProblemDisplayItem> _allProblemItems = [];
     private HealthSnapshot _healthSnapshot = new();
+    private WebDavLockSupport _webDavLockSupport = WebDavLockSupport.NotChecked();
     private UpdateStatusSnapshot _updateStatus = UpdateStatusSnapshot.CreateUnknown(UpdateService.ReleasesPageUrl, "unknown");
     private DatabaseStatistics? _databaseStatistics;
     private int _currentPage = 1;
@@ -38,7 +39,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _maxConcurrentTransfers = 4;
     [ObservableProperty] private AuthType _authType = AuthType.Basic;
     [ObservableProperty] private bool _enableFileLogging;
-    [ObservableProperty] private bool _enableWebDavLocking = true;
     [ObservableProperty] private bool _showNotifications = true;
     [ObservableProperty] private bool _launchOnStartup = true;
     [ObservableProperty] private string _themeMode = "System";
@@ -251,12 +251,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         MaxConcurrentTransfers = settings.MaxConcurrentTransfers;
         AuthType = AuthType.Basic;
         EnableFileLogging = settings.EnableFileLogging;
-        EnableWebDavLocking = settings.EnableWebDavLocking;
         ShowNotifications = settings.ShowNotifications;
         LaunchOnStartup = settings.LaunchOnStartup;
         ThemeMode = settings.ThemeMode;
         Language = AppLanguage.NormalizeSetting(settings.Language);
         HasStoredPassword = CredentialManager.HasPassword();
+        _webDavLockSupport = _dashboardContext.WebDavLockSupportProvider();
         OnPropertyChanged(nameof(AccountDisplay));
         OnPropertyChanged(nameof(SyncRootStatus));
     }
@@ -279,6 +279,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
 
         _updateStatus = _dashboardContext.UpdateStatusProvider();
+        _webDavLockSupport = forceHealthCheck && _dashboardContext.RefreshWebDavLockSupportAsync != null
+            ? await _dashboardContext.RefreshWebDavLockSupportAsync()
+            : _dashboardContext.WebDavLockSupportProvider();
 
         var settings = _dashboardContext.SettingsProvider();
         var entries = _activityTracker?.Entries ?? [];
@@ -471,6 +474,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _dashboardContext.SettingsProvider(),
             DatabaseStatistics,
             _healthSnapshot,
+            _webDavLockSupport,
             _updateStatus,
             _dashboardContext.StartedAt));
     }
@@ -614,7 +618,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         settings.AuthType = AuthType.Basic;
         AuthType = AuthType.Basic;
         settings.EnableFileLogging = EnableFileLogging;
-        settings.EnableWebDavLocking = EnableWebDavLocking;
         settings.ShowNotifications = ShowNotifications;
         settings.LaunchOnStartup = LaunchOnStartup;
         settings.ThemeMode = ThemeMode;
@@ -632,8 +635,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (_dashboardContext.EnsureWatchdogScheduledTaskAsync != null)
             await _dashboardContext.EnsureWatchdogScheduledTaskAsync();
-
-        _dashboardContext.SetWebDavLockingEnabled?.Invoke(EnableWebDavLocking);
 
         StatusMessage = AppLocalizer.Instance.GetString("Settings_Status_SettingsSaved");
         OnPropertyChanged(nameof(AccountDisplay));
