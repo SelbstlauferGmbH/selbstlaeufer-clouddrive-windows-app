@@ -21,7 +21,6 @@ Fields:
 """
 
 import json
-import os
 import time
 from datetime import datetime, timezone
 
@@ -32,25 +31,10 @@ class JsonLogMiddleware:
     def __init__(self, next_app, config=None):
         self.next_app = next_app
         self.config = config or {}
-        self.locking_disabled = os.environ.get(
-            "CLOUDDRIVE_WEBDAV_DISABLE_LOCKS", ""
-        ).lower() in ("1", "true", "yes", "on")
 
     def __call__(self, environ, start_response):
         t0 = time.monotonic()
         status_holder = [None]
-
-        if self.locking_disabled and environ.get("REQUEST_METHOD") in ("LOCK", "UNLOCK"):
-            body = b"WebDAV locking is disabled for this test server.\n"
-            status = "405 Method Not Allowed"
-            headers = [
-                ("Content-Type", "text/plain; charset=utf-8"),
-                ("Content-Length", str(len(body))),
-                ("Allow", "OPTIONS, PROPFIND, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY"),
-            ]
-            start_response(status, headers)
-            self._emit(environ, status, t0, "locking disabled by test server")
-            return [body]
 
         def capturing_start_response(status, headers, exc_info=None):
             status_holder[0] = status

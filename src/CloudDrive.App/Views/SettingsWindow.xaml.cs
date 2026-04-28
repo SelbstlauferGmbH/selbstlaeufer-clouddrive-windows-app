@@ -295,6 +295,24 @@ public partial class SettingsWindow : Window
                     vm.NavigateTo(action.Section.Value);
                 break;
 
+            case ProblemActionKind.ConfirmRemoteDelete:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath))
+                {
+                    await vm.ConfirmRemoteDeleteAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                }
+                break;
+
+            case ProblemActionKind.KeepRemoteCopy:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath))
+                {
+                    await vm.KeepRemoteCopyAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                }
+                break;
+
             case ProblemActionKind.Dismiss:
                 if (action.ProblemId.HasValue)
                     await vm.DismissProblemAsync(action.ProblemId.Value);

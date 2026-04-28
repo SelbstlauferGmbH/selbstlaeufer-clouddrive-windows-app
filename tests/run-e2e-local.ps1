@@ -64,7 +64,7 @@ function Wait-DockerHealth([string]$ContainerName, [string]$DisplayUrl) {
     }
     if ($waited -ge $maxWait) {
         Write-Fail "$ContainerName did not become healthy within ${maxWait}s"
-        [void] (Invoke-NativeNote -FilePath docker -Arguments @("compose", "--profile", "lock-e2e", "logs"))
+        [void] (Invoke-NativeNote -FilePath docker -Arguments @("compose", "logs"))
         if (-not $KeepAlive) { [void] (Invoke-NativeQuiet -FilePath docker -Arguments @("compose", "down", "-v")) }
         exit 1
     }
@@ -96,16 +96,14 @@ Write-Step "Starting local WebDAV test servers (Docker Compose)"
 $sessionStart = [System.DateTime]::UtcNow
 
 Set-Location $repoRoot
-$dockerExitCode = Invoke-NativeNote -FilePath docker -Arguments @("compose", "--profile", "lock-e2e", "up", "-d", "--build")
+$dockerExitCode = Invoke-NativeNote -FilePath docker -Arguments @("compose", "up", "-d", "--build")
 if ($dockerExitCode -ne 0) { Write-Fail "docker compose up failed"; exit 1 }
 
 # ── 3. Wait for healthcheck ───────────────────────────────────────────────────
 Wait-DockerHealth "clouddrive-webdav-test" "http://localhost:8080/"
-Wait-DockerHealth "clouddrive-webdav-nolock-test" "http://localhost:8081/"
 
 # ── 4. Set test environment variables ────────────────────────────────────────
 $env:CLOUDDRIVE_TEST_WEBDAV_URL        = "http://localhost:8080/"
-$env:CLOUDDRIVE_TEST_WEBDAV_NOLOCK_URL = "http://localhost:8081/"
 $env:CLOUDDRIVE_TEST_USERNAME          = "testuser"
 $env:CLOUDDRIVE_TEST_PASSWORD          = "testpass"
 $env:CLOUDDRIVE_TEST_TIMEOUT_SECONDS   = "$TimeoutSeconds"

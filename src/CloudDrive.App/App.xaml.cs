@@ -442,15 +442,27 @@ public partial class App : System.Windows.Application
             EnsureWatchdogScheduledTaskAsync,
             () => updateService.CheckForUpdatesNowAsync(),
             _appStartedAt,
-            () => GetSyncService()?.WebDavLockSupport ?? WebDavLockSupport.NotChecked(),
-            async () =>
-            {
-                var service = GetSyncService();
-                return service == null
-                    ? WebDavLockSupport.NotChecked()
-                    : await service.RefreshWebDavLockSupportAsync();
-            },
+            ConfirmRemoteDeleteAsync,
+            KeepRemoteCopyAsync,
             updateService.ApplyUpdateAndRestart);
+    }
+
+    private async Task ConfirmRemoteDeleteAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.ConfirmRemoteDeleteAsync(problemId, localPath, remotePath);
+    }
+
+    private async Task KeepRemoteCopyAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.KeepRemoteCopyAsync(problemId, localPath, remotePath);
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()

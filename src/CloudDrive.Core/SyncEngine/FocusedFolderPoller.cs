@@ -60,6 +60,14 @@ public sealed class FocusedFolderPoller
         var enqueued = 0;
         foreach (var action in actions.Where(a => a.Type != ReconcileActionType.NoOp))
         {
+            if (action.Type == ReconcileActionType.DeleteRemote)
+            {
+                _logger.LogWarning(
+                    "Focused folder poll blocked unconfirmed remote delete action: {LocalPath}",
+                    action.LocalPath);
+                continue;
+            }
+
             _queue.Enqueue(action);
             enqueued++;
         }

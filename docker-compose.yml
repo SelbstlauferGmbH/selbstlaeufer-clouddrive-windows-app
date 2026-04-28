@@ -6,7 +6,6 @@
 #
 # Usage:
 #   docker compose up -d           # start server
-#   docker compose --profile lock-e2e up -d --build  # start lock/no-lock pair
 #   docker compose down -v         # stop + remove volume
 #   docker compose logs -f webdav  # stream server logs live
 #
@@ -37,35 +36,6 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  webdav-no-lock:
-    profiles:
-      - lock-e2e
-    build:
-      context: tests/docker/wsgidav
-      dockerfile: Dockerfile
-    container_name: clouddrive-webdav-nolock-test
-    environment:
-      CLOUDDRIVE_WEBDAV_DISABLE_LOCKS: "1"
-    ports:
-      - "8081:8080"
-    volumes:
-      - webdav-nolock-data:/data/dav
-    healthcheck:
-      test:
-        - "CMD-SHELL"
-        - "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',8080)); s.close()\""
-      interval: 2s
-      timeout: 5s
-      retries: 20
-      start_period: 3s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-
 volumes:
   webdav-data:
-    driver: local
-  webdav-nolock-data:
     driver: local

@@ -36,8 +36,8 @@ public sealed class AppDashboardContext
         Func<Task>? ensureWatchdogScheduledTaskAsync,
         Func<Task>? checkForUpdatesNowAsync,
         DateTime startedAt,
-        Func<WebDavLockSupport>? webDavLockSupportProvider = null,
-        Func<Task<WebDavLockSupport>>? refreshWebDavLockSupportAsync = null,
+        Func<long, string, string, Task>? confirmRemoteDeleteAsync = null,
+        Func<long, string, string, Task>? keepRemoteCopyAsync = null,
         Action? applyUpdateAndRestart = null)
     {
         ActivityTracker = activityTracker;
@@ -55,8 +55,8 @@ public sealed class AppDashboardContext
         EnsureWatchdogScheduledTaskAsync = ensureWatchdogScheduledTaskAsync;
         CheckForUpdatesNowAsync = checkForUpdatesNowAsync;
         StartedAt = startedAt;
-        WebDavLockSupportProvider = webDavLockSupportProvider ?? WebDavLockSupport.NotChecked;
-        RefreshWebDavLockSupportAsync = refreshWebDavLockSupportAsync;
+        ConfirmRemoteDeleteAsync = confirmRemoteDeleteAsync;
+        KeepRemoteCopyAsync = keepRemoteCopyAsync;
         ApplyUpdateAndRestart = applyUpdateAndRestart ?? (() => { });
     }
 
@@ -75,8 +75,8 @@ public sealed class AppDashboardContext
     public Func<Task>? EnsureWatchdogScheduledTaskAsync { get; }
     public Func<Task>? CheckForUpdatesNowAsync { get; }
     public DateTime StartedAt { get; }
-    public Func<WebDavLockSupport> WebDavLockSupportProvider { get; }
-    public Func<Task<WebDavLockSupport>>? RefreshWebDavLockSupportAsync { get; }
+    public Func<long, string, string, Task>? ConfirmRemoteDeleteAsync { get; }
+    public Func<long, string, string, Task>? KeepRemoteCopyAsync { get; }
     public Action ApplyUpdateAndRestart { get; }
 }
 
@@ -202,6 +202,8 @@ public enum ProblemActionKind
     OpenFolder,
     SyncNow,
     OpenSettings,
+    ConfirmRemoteDelete,
+    KeepRemoteCopy,
     Dismiss
 }
 
@@ -210,6 +212,7 @@ public sealed class ProblemDisplayAction
     public required ProblemActionKind Kind { get; init; }
     public required string Label { get; init; }
     public string? Path { get; init; }
+    public string? RemotePath { get; init; }
     public SettingsSection? Section { get; init; }
     public long? ProblemId { get; init; }
 }
@@ -724,7 +727,6 @@ public static class DashboardBuilder
         AppSettings settings,
         DatabaseStatistics? stats,
         HealthSnapshot health,
-        WebDavLockSupport webDavLockSupport,
         UpdateStatusSnapshot updaterStatus,
         DateTime startedAt)
     {
@@ -742,19 +744,6 @@ public static class DashboardBuilder
                 ActionLabel = L("Common_Recheck"),
                 ActionId = "recheck-health",
                 AccentBrush = BrushForState(health.State)
-            },
-            new()
-            {
-                Name = L("HealthCheck_WebDavLock_Name"),
-                Description = DescribeWebDavLockSupportDetail(webDavLockSupport),
-                State = DescribeWebDavLockSupportState(webDavLockSupport),
-                StatusText = DescribeWebDavLockSupportStatus(webDavLockSupport),
-                LastCheckedText = webDavLockSupport.CheckedAtUtc.HasValue
-                    ? FormatRelativeTime(webDavLockSupport.CheckedAtUtc.Value.LocalDateTime)
-                    : L("HealthCheck_LastChecked_Never"),
-                ActionLabel = L("Common_Recheck"),
-                ActionId = "recheck-health",
-                AccentBrush = BrushForState(DescribeWebDavLockSupportState(webDavLockSupport))
             },
             new()
             {
@@ -823,43 +812,6 @@ public static class DashboardBuilder
         };
 
         return checks;
-    }
-
-    private static DashboardHealthState DescribeWebDavLockSupportState(WebDavLockSupport support)
-    {
-        return support.State switch
-        {
-            WebDavLockSupportState.Supported => DashboardHealthState.Healthy,
-            WebDavLockSupportState.Unsupported => DashboardHealthState.Warning,
-            WebDavLockSupportState.ProbeFailed => DashboardHealthState.Warning,
-            _ => DashboardHealthState.Unknown
-        };
-    }
-
-    private static string DescribeWebDavLockSupportStatus(WebDavLockSupport support)
-    {
-        return support.State switch
-        {
-            WebDavLockSupportState.Supported => L("HealthCheck_WebDavLock_Status_Available"),
-            WebDavLockSupportState.Unsupported => L("HealthCheck_WebDavLock_Status_Unavailable"),
-            WebDavLockSupportState.ProbeFailed => L("HealthCheck_WebDavLock_Status_ProbeFailed"),
-            _ => L("Common_Unknown")
-        };
-    }
-
-    private static string DescribeWebDavLockSupportDetail(WebDavLockSupport support)
-    {
-        return support.State switch
-        {
-            WebDavLockSupportState.Supported => L("HealthCheck_WebDavLock_Detail_Available"),
-            WebDavLockSupportState.Unsupported => string.IsNullOrWhiteSpace(support.Detail)
-                ? L("HealthCheck_WebDavLock_Detail_Unavailable")
-                : support.Detail,
-            WebDavLockSupportState.ProbeFailed => string.IsNullOrWhiteSpace(support.Detail)
-                ? L("HealthCheck_WebDavLock_Detail_ProbeFailed")
-                : support.Detail,
-            _ => L("HealthCheck_WebDavLock_Detail_NotChecked")
-        };
     }
 
     private static DashboardHealthState DescribeUpdaterState(UpdateStatusSnapshot snapshot)
@@ -1069,6 +1021,7 @@ public static class DashboardBuilder
                 SyncProblemType.Conflict => L("Problem_Kind_Conflict"),
                 SyncProblemType.Connection => L("Problem_Kind_Connection"),
                 SyncProblemType.RemoteLock => L("Problem_Kind_RemoteLock"),
+                SyncProblemType.RemoteDeleteConfirmation => L("Problem_Kind_RemoteDeleteConfirmation"),
                 SyncProblemType.RemoteListing or SyncProblemType.RemoteSync => L("Problem_Kind_SyncError"),
                 SyncProblemType.Upload => L("Problem_Kind_UploadError"),
                 SyncProblemType.Download => L("Problem_Kind_DownloadError"),
@@ -1085,12 +1038,14 @@ public static class DashboardBuilder
             FolderPath = folderPath,
             PrimaryAction = primaryAction,
             SecondaryAction = secondaryAction,
-            DismissAction = new ProblemDisplayAction
-            {
-                Kind = ProblemActionKind.Dismiss,
-                Label = L("Common_Dismiss"),
-                ProblemId = problem.Id
-            }
+            DismissAction = problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation
+                ? null
+                : new ProblemDisplayAction
+                {
+                    Kind = ProblemActionKind.Dismiss,
+                    Label = L("Common_Dismiss"),
+                    ProblemId = problem.Id
+                }
         };
     }
 
@@ -1145,6 +1100,20 @@ public static class DashboardBuilder
             };
         }
 
+        if (problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation &&
+            !string.IsNullOrWhiteSpace(problem.LocalPath) &&
+            !string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return new ProblemDisplayAction
+            {
+                Kind = ProblemActionKind.ConfirmRemoteDelete,
+                Label = L("Problem_Action_DeleteRemote"),
+                Path = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                ProblemId = problem.Id
+            };
+        }
+
         if (!string.IsNullOrWhiteSpace(problem.LocalPath) &&
             (File.Exists(problem.LocalPath) || Directory.Exists(problem.LocalPath)))
         {
@@ -1170,6 +1139,20 @@ public static class DashboardBuilder
 
     private static ProblemDisplayAction? BuildSecondaryProblemAction(SyncProblem problem, string? folderPath)
     {
+        if (problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation &&
+            !string.IsNullOrWhiteSpace(problem.LocalPath) &&
+            !string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return new ProblemDisplayAction
+            {
+                Kind = ProblemActionKind.KeepRemoteCopy,
+                Label = L("Problem_Action_KeepRemote"),
+                Path = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                ProblemId = problem.Id
+            };
+        }
+
         if (problem.ProblemType == SyncProblemType.Conflict &&
             !string.IsNullOrWhiteSpace(problem.LocalPath) &&
             File.Exists(problem.LocalPath))
@@ -1409,6 +1392,10 @@ public static class DashboardBuilder
                 L("Problem_ConnectionLost_Summary"),
                 problem.Details),
             SyncProblemType.RemoteLock => (
+                problem.Title,
+                problem.Summary,
+                problem.Details),
+            SyncProblemType.RemoteDeleteConfirmation => (
                 problem.Title,
                 problem.Summary,
                 problem.Details),

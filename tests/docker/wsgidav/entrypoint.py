@@ -9,7 +9,6 @@ Startup lines written to stdout (one per line):
 """
 
 import json
-import os
 import signal
 import sys
 from datetime import datetime, timezone
@@ -45,12 +44,9 @@ def main():
         (config.get("simple_dc", {}).get("user_mapping", {}).get("*") or {}).keys()
     )
     mounts = list(config.get("provider_mapping", {}).keys())
-    lock_mode = "disabled" if os.environ.get(
-        "CLOUDDRIVE_WEBDAV_DISABLE_LOCKS", ""
-    ).lower() in ("1", "true", "yes", "on") else "enabled"
 
     _info("Starting WebDAV test server", host=HOST, port=PORT,
-          mounts=mounts, auth_users=users, lock_mode=lock_mode)
+          mounts=mounts, auth_users=users)
 
     inner = WsgiDAVApp(config)
     app = JsonLogMiddleware(inner, config)

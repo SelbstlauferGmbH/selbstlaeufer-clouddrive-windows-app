@@ -26,7 +26,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private IReadOnlyList<ActivityDisplayItem> _allActivityItems = [];
     private IReadOnlyList<ProblemDisplayItem> _allProblemItems = [];
     private HealthSnapshot _healthSnapshot = new();
-    private WebDavLockSupport _webDavLockSupport = WebDavLockSupport.NotChecked();
     private UpdateStatusSnapshot _updateStatus = UpdateStatusSnapshot.CreateUnknown(UpdateService.ReleasesPageUrl, "unknown");
     private DatabaseStatistics? _databaseStatistics;
     private int _currentPage = 1;
@@ -256,7 +255,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ThemeMode = settings.ThemeMode;
         Language = AppLanguage.NormalizeSetting(settings.Language);
         HasStoredPassword = CredentialManager.HasPassword();
-        _webDavLockSupport = _dashboardContext.WebDavLockSupportProvider();
         OnPropertyChanged(nameof(AccountDisplay));
         OnPropertyChanged(nameof(SyncRootStatus));
     }
@@ -279,9 +277,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
 
         _updateStatus = _dashboardContext.UpdateStatusProvider();
-        _webDavLockSupport = forceHealthCheck && _dashboardContext.RefreshWebDavLockSupportAsync != null
-            ? await _dashboardContext.RefreshWebDavLockSupportAsync()
-            : _dashboardContext.WebDavLockSupportProvider();
 
         var settings = _dashboardContext.SettingsProvider();
         var entries = _activityTracker?.Entries ?? [];
@@ -400,6 +395,22 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         await RefreshAsync();
     }
 
+    public async Task ConfirmRemoteDeleteAsync(long problemId, string localPath, string remotePath)
+    {
+        if (_dashboardContext.ConfirmRemoteDeleteAsync != null)
+            await _dashboardContext.ConfirmRemoteDeleteAsync(problemId, localPath, remotePath);
+
+        await RefreshAsync();
+    }
+
+    public async Task KeepRemoteCopyAsync(long problemId, string localPath, string remotePath)
+    {
+        if (_dashboardContext.KeepRemoteCopyAsync != null)
+            await _dashboardContext.KeepRemoteCopyAsync(problemId, localPath, remotePath);
+
+        await RefreshAsync();
+    }
+
     public async Task TriggerSyncNowAsync()
     {
         if (_dashboardContext.SyncNowAsync != null)
@@ -477,7 +488,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _dashboardContext.SettingsProvider(),
             DatabaseStatistics,
             _healthSnapshot,
-            _webDavLockSupport,
             _updateStatus,
             _dashboardContext.StartedAt));
     }

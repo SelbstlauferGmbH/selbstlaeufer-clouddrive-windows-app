@@ -70,6 +70,23 @@ public class UploadManagerConflictTests
                 ETag = "etag-new"
             });
         webDav
+            .Setup(x => x.GetPropertiesAsync(
+                It.Is<string>(path =>
+                    !string.Equals(path, remotePath, StringComparison.OrdinalIgnoreCase) &&
+                    path.Contains("conflict", StringComparison.OrdinalIgnoreCase) &&
+                    path.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((RemoteItem?)null);
+        webDav
+            .Setup(x => x.UploadFileAsync(
+                It.Is<string>(path =>
+                    !string.Equals(path, remotePath, StringComparison.OrdinalIgnoreCase) &&
+                    path.Contains("conflict", StringComparison.OrdinalIgnoreCase) &&
+                    path.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)),
+                It.IsAny<Stream>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("etag-conflict-copy");
+        webDav
             .Setup(x => x.DownloadFileAsync(remotePath, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new MemoryStream(Encoding.UTF8.GetBytes("remote version")));
 
