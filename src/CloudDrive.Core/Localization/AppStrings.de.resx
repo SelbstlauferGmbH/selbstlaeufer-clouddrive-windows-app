@@ -156,6 +156,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Common_CheckNow" xml:space="preserve">
     <value>Jetzt pruefen</value>
   </data>
+  <data name="Common_UpdateAndRestartNow" xml:space="preserve">
+    <value>Update installieren und neu starten</value>
+  </data>
   <data name="Common_Dismiss" xml:space="preserve">
     <value>Ausblenden</value>
   </data>
@@ -1284,7 +1287,7 @@ Waehlen Sie Abbrechen, um hier zu stoppen und die vorhandenen Dateien zu behalte
     <value>Selbstläufer CloudDrive beenden</value>
   </data>
   <data name="Tray_Menu_UpdateAvailable" xml:space="preserve">
-    <value>Update jetzt installieren</value>
+    <value>Update installieren und neu starten</value>
   </data>
   <data name="Tray_Balloon_Startup_ServerUnreachable" xml:space="preserve">
     <value>CloudDrive wurde gestartet, aber {0} konnte nicht erreicht werden.</value>

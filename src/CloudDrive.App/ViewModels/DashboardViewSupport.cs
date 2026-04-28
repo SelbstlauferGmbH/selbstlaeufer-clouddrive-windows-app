@@ -37,7 +37,8 @@ public sealed class AppDashboardContext
         Func<Task>? checkForUpdatesNowAsync,
         DateTime startedAt,
         Func<WebDavLockSupport>? webDavLockSupportProvider = null,
-        Func<Task<WebDavLockSupport>>? refreshWebDavLockSupportAsync = null)
+        Func<Task<WebDavLockSupport>>? refreshWebDavLockSupportAsync = null,
+        Action? applyUpdateAndRestart = null)
     {
         ActivityTracker = activityTracker;
         Database = database;
@@ -56,6 +57,7 @@ public sealed class AppDashboardContext
         StartedAt = startedAt;
         WebDavLockSupportProvider = webDavLockSupportProvider ?? WebDavLockSupport.NotChecked;
         RefreshWebDavLockSupportAsync = refreshWebDavLockSupportAsync;
+        ApplyUpdateAndRestart = applyUpdateAndRestart ?? (() => { });
     }
 
     public IActivityTracker ActivityTracker { get; }
@@ -75,6 +77,7 @@ public sealed class AppDashboardContext
     public DateTime StartedAt { get; }
     public Func<WebDavLockSupport> WebDavLockSupportProvider { get; }
     public Func<Task<WebDavLockSupport>>? RefreshWebDavLockSupportAsync { get; }
+    public Action ApplyUpdateAndRestart { get; }
 }
 
 public enum SettingsSection
@@ -762,8 +765,12 @@ public static class DashboardBuilder
                 LastCheckedText = updaterStatus.LastCheckedUtc.HasValue
                     ? FormatRelativeTime(updaterStatus.LastCheckedUtc.Value.LocalDateTime)
                     : L("HealthCheck_LastChecked_Never"),
-                ActionLabel = L("Common_CheckNow"),
-                ActionId = "check-updates",
+                ActionLabel = updaterStatus.State == UpdateStatusState.UpdateReady
+                    ? L("Common_UpdateAndRestartNow")
+                    : L("Common_CheckNow"),
+                ActionId = updaterStatus.State == UpdateStatusState.UpdateReady
+                    ? "install-update"
+                    : "check-updates",
                 AccentBrush = BrushForState(DescribeUpdaterState(updaterStatus))
             },
             new()

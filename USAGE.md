@@ -119,7 +119,7 @@ The tray menu includes:
 | **Open activity stream** | Opens the activity flyout. |
 | **Open settings** | Opens the settings/control panel window. |
 | **Pause sync** / **Resume sync** | Pauses or resumes sync work. |
-| **Install update now** | Appears only when an update is ready. |
+| **Update and restart now** | Appears only when an update is ready. |
 | **Quit** | Stops syncing and exits the app. |
 
 The activity stream gives quick access to recent sync events, current health, open folder, manual sync, web portal, and settings shortcuts.

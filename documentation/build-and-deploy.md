@@ -287,7 +287,7 @@ Use the same workflow for updates:
 6. Upload with `-SkipBuild`.
 7. Verify the GitHub release assets.
 
-Installed apps on the `stable` channel check GitHub Releases, download the update in the background, and show `Install update now` in the tray menu when ready.
+Installed apps on the `stable` channel check GitHub Releases, download the update in the background, and show `Update and restart now` in the tray menu when ready.
 
 ---
 
@@ -395,7 +395,7 @@ Check:
 - all Velopack assets are attached
 - the app was installed through the Velopack setup executable
 - the app has been running at least 30 seconds
-- the tray menu shows `Install update now` after download
+- the tray menu shows `Update and restart now` after download
 
 ---
 

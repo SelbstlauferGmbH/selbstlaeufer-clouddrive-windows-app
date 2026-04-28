@@ -29,6 +29,7 @@ public class TrayIconManager : IDisposable
     private readonly ToolStripMenuItem _quitItem;
     private SyncState _currentState = SyncState.Disconnected;
     private long _lastToggleTick;
+    private Action? _balloonClickRequested;
     private Action? _installUpdateRequested;
 
     public event Action? SettingsRequested;
@@ -70,6 +71,7 @@ public class TrayIconManager : IDisposable
 
         _notifyIcon.MouseUp += OnMouseUp;
         _notifyIcon.DoubleClick += (_, _) => RaiseToggleIfNeeded();
+        _notifyIcon.BalloonTipClicked += OnBalloonTipClicked;
         AppLocalizer.Instance.CultureChanged += OnCultureChanged;
 
         UpdateState(SyncState.Disconnected);
@@ -107,8 +109,9 @@ public class TrayIconManager : IDisposable
         Log.Debug("UI[Tray] State updated to {State}", state);
     }
 
-    public void ShowBalloon(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
+    public void ShowBalloon(string title, string text, ToolTipIcon icon = ToolTipIcon.Info, Action? onClicked = null)
     {
+        _balloonClickRequested = onClicked;
         _notifyIcon.ShowBalloonTip(3000, title, text, icon);
     }
 
@@ -169,6 +172,24 @@ public class TrayIconManager : IDisposable
 
         _updateItem.Enabled = false;
         callback();
+    }
+
+    private void OnBalloonTipClicked(object? sender, EventArgs e)
+    {
+        var callback = _balloonClickRequested;
+        _balloonClickRequested = null;
+
+        if (callback == null)
+            return;
+
+        try
+        {
+            callback();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "UI[Tray] Balloon click action failed");
+        }
     }
 
     private Icon GetIconForState(SyncState state)

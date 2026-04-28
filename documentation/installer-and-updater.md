@@ -145,7 +145,7 @@ When a new release is available:
 2. If a newer version exists, it downloads the update in the background.
 3. After download completes, it stores the pending update and raises `UpdateReady`.
 4. `App.xaml.cs` handles that event on the UI thread.
-5. The tray icon shows an informational notification and the `Install update now` menu item.
+5. The tray icon shows an informational notification and the `Update and restart now` menu item.
 6. When the user clicks that menu item, `ApplyUpdateAndRestart()` is called.
 7. Velopack applies the update and restarts the application.
 

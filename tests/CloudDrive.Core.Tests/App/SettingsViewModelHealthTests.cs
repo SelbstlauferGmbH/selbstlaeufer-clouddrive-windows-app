@@ -79,6 +79,42 @@ public class SettingsViewModelHealthTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenUpdateReady_OffersInstallAndRestartAction()
+    {
+        using var harness = new SettingsViewModelHarness(enableFileLogging: false)
+        {
+            UpdateStatus = new UpdateStatusSnapshot(
+                UpdateStatusState.UpdateReady,
+                "0.1.0",
+                UpdateService.ReleasesPageUrl,
+                UpdateService.ReleasesPageUrl,
+                new DateTimeOffset(2026, 4, 8, 11, 45, 0, TimeSpan.Zero),
+                AvailableVersion: "0.2.0")
+        };
+
+        using var viewModel = harness.CreateViewModel();
+        await viewModel.RefreshAsync();
+
+        var updaterCheck = viewModel.HealthChecks.Single(check => check.Name == AppLocalizer.Instance.GetString("HealthCheck_Updater_Name"));
+        updaterCheck.ActionId.ShouldBe("install-update");
+        updaterCheck.ActionLabel.ShouldBe(AppLocalizer.Instance.GetString("Common_UpdateAndRestartNow"));
+    }
+
+    [Fact]
+    public async Task ExecuteHealthActionAsync_WhenInstallingUpdate_InvokesCallback()
+    {
+        using var harness = new SettingsViewModelHarness(enableFileLogging: false);
+        var callbackInvocations = 0;
+
+        using var viewModel = harness.CreateViewModel(
+            applyUpdateAndRestart: () => callbackInvocations++);
+
+        await viewModel.ExecuteHealthActionAsync("install-update");
+
+        callbackInvocations.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task ResetCommand_InvokesLocalResetCallback()
     {
         using var harness = new SettingsViewModelHarness(enableFileLogging: false);
@@ -150,7 +186,8 @@ public class SettingsViewModelHealthTests
         public SettingsViewModel CreateViewModel(
             Func<Task>? checkForUpdatesNowAsync = null,
             Func<Task>? resetCallback = null,
-            Func<Task>? resetConfigurationCallback = null)
+            Func<Task>? resetConfigurationCallback = null,
+            Action? applyUpdateAndRestart = null)
         {
             return new SettingsViewModel(
                 NullLoggerFactory.Instance,
@@ -170,7 +207,8 @@ public class SettingsViewModelHealthTests
                     ensureWatchdogScheduledTaskAsync: null,
                     checkForUpdatesNowAsync: checkForUpdatesNowAsync,
                     startedAt: new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Local),
-                    webDavLockSupportProvider: () => WebDavLockSupport.Supported("Test lock support")),
+                    webDavLockSupportProvider: () => WebDavLockSupport.Supported("Test lock support"),
+                    applyUpdateAndRestart: applyUpdateAndRestart),
                 resetCallback: resetCallback,
                 resetConfigurationCallback: resetConfigurationCallback);
         }
