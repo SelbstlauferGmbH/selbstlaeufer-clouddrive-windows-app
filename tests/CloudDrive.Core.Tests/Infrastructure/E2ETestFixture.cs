@@ -3,6 +3,7 @@ using CloudDrive.Core.Data;
 using CloudDrive.Core.SyncEngine;
 using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging;
+using System.Text;
 
 namespace CloudDrive.Core.Tests.Infrastructure;
 
@@ -21,6 +22,7 @@ public class E2ETestFixture : IAsyncLifetime
     public IWebDavService WebDav { get; private set; } = null!;
     public TestSessionLogger SessionLogger { get; private set; } = new();
     private JsonFileLogSink _fileLogSink = null!;
+    private string _seedRemotePath = "";
 
     /// <summary>Shortcut to the coordinator's internal DB (shared instance).</summary>
     public SyncStateDb Db => Coordinator.Db;
@@ -83,6 +85,8 @@ public class E2ETestFixture : IAsyncLifetime
         var httpClient = new HttpClient(handler);
         WebDav = new WebDavService(httpClient, Settings.WebDavUrl, loggerFactory.CreateLogger<WebDavService>());
 
+        await SeedRemoteRootAsync();
+
         Coordinator = new SyncCoordinator(Settings, WebDav, loggerFactory);
 
         // Fix Issue 7: Attach state handler BEFORE calling StartAsync
@@ -130,6 +134,16 @@ public class E2ETestFixture : IAsyncLifetime
         try { _fileLogSink.Dispose(); } catch { /* best effort */ }
 
         LogSink.Dispose();
+    }
+
+    private async Task SeedRemoteRootAsync()
+    {
+        _seedRemotePath = $"/e2e-test-seed-{Guid.NewGuid():N}.txt";
+        var content = Encoding.UTF8.GetBytes(
+            "CloudDrive E2E seed file. This keeps cfapi placeholder tests deterministic on a fresh WebDAV volume.\n");
+
+        await using var stream = new MemoryStream(content);
+        await WebDav.UploadFileAsync(_seedRemotePath, stream);
     }
 
     /// <summary>Wait for SyncCoordinator to reach a specific state (event-driven).</summary>

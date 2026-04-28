@@ -36,7 +36,7 @@ Passed! - Failed: 0, Passed: 47, Skipped: 0, Total: 47
 
 ## 2 — E2E Tests (automated, with Docker)
 
-**What:** Tests the full sync engine end-to-end against a real WebDAV server running locally in Docker. Uses the actual Windows Cloud Files API (cfapi). Covers: folder browsing, file creation, upload, hydration, deletion.
+**What:** Tests the full sync engine end-to-end against real WebDAV servers running locally in Docker. Uses the actual Windows Cloud Files API (cfapi) for lifecycle tests and direct WebDAV calls for lock capability tests. Covers: folder browsing, file creation, upload, hydration, deletion, and WebDAV lock detection.
 
 **When to use:** After changing anything in `SyncCoordinator`, `WebDavService`, `UploadManager`, `HydrationHandler`, or the cfapi connector.
 
@@ -50,8 +50,8 @@ tests/run-e2e-local.ps1
 
 What it does step by step:
 1. Builds the solution
-2. Starts the local WebDAV server in Docker (`localhost:8080`)
-3. Waits for the server health check to pass
+2. Starts the local WebDAV servers in Docker (`localhost:8080` with locks, `localhost:8081` without locks)
+3. Waits for both server health checks to pass
 4. Runs `dotnet test --filter Category=E2E`
 5. Collects server logs from Docker
 6. Merges client logs + server logs into one time-sorted file
@@ -62,7 +62,8 @@ What it does step by step:
 | File | Content |
 |------|---------|
 | `e2e-<stamp>-merged.jsonl` | **Main debug file** — all events from server and client, sorted by time |
-| `e2e-<stamp>-server.jsonl` | Raw WebDAV server requests (method, path, status, duration) |
+| `e2e-<stamp>-server.jsonl` | Raw lock-capable WebDAV server requests (method, path, status, duration) |
+| `e2e-<stamp>-server-nolock.jsonl` | Raw no-lock WebDAV server requests for lock detection tests |
 | `e2e-<stamp>-dotnet.txt` | xUnit console output |
 | `e2e-<stamp>.trx` | TRX report (openable in Visual Studio) |
 
@@ -74,6 +75,9 @@ tests/run-e2e-local.ps1 -KeepAlive
 
 # Run only one test class
 tests/run-e2e-local.ps1 -Filter "Category=E2E&ClassName=FullLifecycleTest"
+
+# Run only WebDAV lock detection tests
+tests/run-e2e-local.ps1 -Filter "FullyQualifiedName~WebDavLockSupportTest"
 
 # Longer timeouts for slow machines
 tests/run-e2e-local.ps1 -TimeoutSeconds 120

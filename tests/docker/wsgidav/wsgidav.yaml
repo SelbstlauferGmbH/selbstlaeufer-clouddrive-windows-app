@@ -8,6 +8,9 @@ port: 8080
 provider_mapping:
   "/": "/data/dav"
 
+# Keep the default Class 2 WebDAV behavior explicit for lock-detection tests.
+lock_storage: true
+
 http_authenticator:
   domain_controller: wsgidav.dc.simple_dc.SimpleDomainController
   accept_basic: true
