@@ -24,6 +24,8 @@ public static class SyncProblemKeys
 
     public static string RemoteSync() => "remote-sync";
 
+    public static string RemoteDeleteConfirmation(string localPath) => $"remote-delete-confirmation:{localPath}";
+
     public static string Upload(string localPath) => $"upload:{localPath}";
 
     public static string Download(string localPath) => $"download:{localPath}";

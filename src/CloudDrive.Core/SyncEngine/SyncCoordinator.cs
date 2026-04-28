@@ -37,7 +37,6 @@ public class SyncCoordinator : IDisposable
     private readonly PathMapper _pathMapper;
     private readonly ExplorerWindowMonitor _explorerWindowMonitor;
     private readonly ActiveCloudRequestTracker _activeCloudRequestTracker;
-    private readonly WebDavLockCoordinator _webDavLockCoordinator;
 
     private CancellationTokenSource? _cts;
     private Task? _uploadTask;
@@ -113,11 +112,6 @@ public class SyncCoordinator : IDisposable
             _pathMapper.ToRemotePath);
         _propagatorQueue = new PropagatorQueue(_db);
         _explorerItemStateService = new ExplorerItemStateService(loggerFactory.CreateLogger<ExplorerItemStateService>());
-        _webDavLockCoordinator = new WebDavLockCoordinator(
-            webDav,
-            _pathMapper,
-            _problemService,
-            loggerFactory.CreateLogger<WebDavLockCoordinator>());
         _propagator = new Propagator(
             _vfs,
             _journal,
@@ -125,8 +119,7 @@ public class SyncCoordinator : IDisposable
             _problemService,
             loggerFactory.CreateLogger<Propagator>(),
             _stateService,
-            _explorerItemStateService,
-            _webDavLockCoordinator);
+            _explorerItemStateService);
         _placeholderManager = new PlaceholderManager(webDav, _stateService, _pathMapper, loggerFactory.CreateLogger<PlaceholderManager>());
         _projectionService = new SyncProjectionService(_placeholderManager, _stateService, cloudFileOperations, loggerFactory.CreateLogger<SyncProjectionService>());
         _hydrationHandler = new HydrationHandler(webDav, _stateService, _pathMapper, _projectionService, loggerFactory.CreateLogger<HydrationHandler>(), _activeCloudRequestTracker);
@@ -156,8 +149,6 @@ public class SyncCoordinator : IDisposable
         _connector.FetchPlaceholdersRequested += _placeholderManager.HandleFetchPlaceholdersAsync;
         _connector.FetchDataRequested += _hydrationHandler.HandleFetchDataAsync;
         _connector.CancelFetchDataRequested += _hydrationHandler.HandleCancelFetchDataAsync;
-        _connector.FileOpenCompleted += HandleFileOpenCompletedAsync;
-        _connector.FileCloseCompleted += HandleFileCloseCompletedAsync;
     }
 
     /// <summary>
@@ -175,19 +166,6 @@ public class SyncCoordinator : IDisposable
     {
         _explorerStatusManager = manager;
     }
-
-    public WebDavLockSupport WebDavLockSupport => _webDavLockCoordinator.LockSupport;
-
-    public void SetWebDavLockSupport(WebDavLockSupport support)
-    {
-        _webDavLockCoordinator.SetLockSupport(support);
-    }
-
-    private Task HandleFileOpenCompletedAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters) =>
-        _webDavLockCoordinator.HandleFileOpenAsync(callbackInfo.NormalizedPath);
-
-    private Task HandleFileCloseCompletedAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters) =>
-        _webDavLockCoordinator.HandleFileCloseAsync(callbackInfo.NormalizedPath);
 
     /// <summary>
     /// Register sync root and connect cfapi callbacks.
@@ -281,17 +259,6 @@ public class SyncCoordinator : IDisposable
         }
         catch (OperationCanceledException) { }
 
-        // Signal shutdown to Windows before disconnecting
-        try
-        {
-            using var releaseLocksCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            await _webDavLockCoordinator.ReleaseAllAsync(releaseLocksCts.Token);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Timed out or failed while releasing WebDAV locks during shutdown");
-        }
-
         _connector.UpdateSyncProviderStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_DISCONNECTED);
 
         _connector.Disconnect();
@@ -331,6 +298,105 @@ public class SyncCoordinator : IDisposable
         }
 
         await ExecuteRemoteSyncPassAsync(ct);
+    }
+
+    public async Task ConfirmRemoteDeleteAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        var remote = await _webDav.GetPropertiesAsync(remotePath, ct);
+        if (remote == null)
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return;
+        }
+
+        if (journalRecord != null && ConflictDetector.HasRemoteChanged(journalRecord, remote))
+        {
+            _logger.LogWarning(
+                "Remote delete confirmation ignored because the remote item changed meanwhile: {RemotePath}",
+                remotePath);
+            ClearRemoteDeletePending(journalRecord);
+            EnqueueAction(new ReconcileAction(
+                ReconcileActionType.DownloadChanged,
+                localPath,
+                remote.RemotePath,
+                journalRecord.FileId,
+                Local: null,
+                Journal: journalRecord,
+                Remote: remote));
+            _problemService.Resolve(problemId);
+            return;
+        }
+
+        journalRecord ??= new SyncJournalRecord
+        {
+            FileId = SyncIdentity.RemotePathFallbackId(remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = syncItem?.IsDirectory ?? remote.IsDirectory,
+            Size = syncItem?.FileSize ?? remote.Size,
+            ETag = syncItem?.RemoteETag ?? remote.ETag,
+            BaseETag = syncItem?.RemoteETag ?? remote.ETag,
+            MTimeUtc = syncItem?.RemoteLastModified ?? (remote.LastModified == DateTime.MinValue
+                ? DateTime.UtcNow
+                : remote.LastModified.ToUniversalTime())
+        };
+        journalRecord.LocalPendingOp = SyncPendingOperations.RemoteDeleteConfirmation;
+        journalRecord.InSync = false;
+        _journal.Upsert(journalRecord);
+
+        var enqueued = EnqueueAction(new ReconcileAction(
+            ReconcileActionType.DeleteRemote,
+            localPath,
+            remotePath,
+            journalRecord?.FileId,
+            Local: null,
+            Journal: journalRecord,
+            Remote: remote));
+        if (enqueued)
+            _problemService.Resolve(problemId);
+    }
+
+    public async Task KeepRemoteCopyAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        var remote = await _webDav.GetPropertiesAsync(remotePath, ct);
+        if (remote == null)
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return;
+        }
+
+        if (journalRecord != null)
+            ClearRemoteDeletePending(journalRecord);
+
+        EnqueueAction(new ReconcileAction(
+            journalRecord == null ? ReconcileActionType.DownloadNew : ReconcileActionType.DownloadChanged,
+            localPath,
+            remote.RemotePath,
+            journalRecord?.FileId ?? SyncIdentity.RemotePathFallbackId(remote.RemotePath),
+            Local: null,
+            Journal: journalRecord,
+            Remote: remote));
+        _problemService.Resolve(problemId);
     }
 
     /// <summary>
@@ -505,6 +571,12 @@ public class SyncCoordinator : IDisposable
             return;
         }
 
+        if (change.ChangeType == FileChangeType.Deleted)
+        {
+            await ReportRemoteDeleteConfirmationAsync(change.OldFullPath ?? change.FullPath, ct);
+            return;
+        }
+
         var scanRoot = change.ChangeType == FileChangeType.Deleted
             ? GetExistingParentDirectory(change.OldFullPath ?? change.FullPath)
             : GetExistingParentDirectory(change.FullPath);
@@ -527,7 +599,7 @@ public class SyncCoordinator : IDisposable
         return change.ChangeType switch
         {
             FileChangeType.Created or FileChangeType.Changed => BuildUploadAction(change.FullPath),
-            FileChangeType.Deleted => BuildDeleteRemoteAction(change.FullPath),
+            FileChangeType.Deleted => null,
             FileChangeType.Renamed => BuildMoveRemoteAction(change.FullPath, change.OldFullPath),
             _ => null
         };
@@ -562,27 +634,70 @@ public class SyncCoordinator : IDisposable
             Remote: null);
     }
 
-    private ReconcileAction? BuildDeleteRemoteAction(string localPath)
+    private async Task ReportRemoteDeleteConfirmationAsync(string localPath, CancellationToken ct)
     {
         if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath))
         {
             _logger.LogDebug("Ignoring transient local delete candidate: {Path}", localPath);
-            return null;
+            return;
         }
 
         var journalRecord = _journal.GetByLocalPath(localPath);
         var syncItem = _stateService.GetByLocalPath(localPath);
         if (journalRecord == null && syncItem == null)
-            return null;
+            return;
 
-        return new ReconcileAction(
-            ReconcileActionType.DeleteRemote,
-            localPath,
-            journalRecord?.RemotePath ?? syncItem!.RemotePath,
-            journalRecord?.FileId,
-            Local: null,
-            Journal: journalRecord,
-            Remote: null);
+        if (syncItem?.SyncStatus == SyncStatus.RemoteDeletePendingLocalCleanup)
+        {
+            _logger.LogInformation("Skipping remote delete confirmation for provider-owned cleanup: {Path}", localPath);
+            _stateService.CompleteRemoteDeletion(localPath, syncItem.IsDirectory);
+            return;
+        }
+
+        var remotePath = journalRecord?.RemotePath ?? syncItem!.RemotePath;
+        var remote = await _webDav.GetPropertiesAsync(remotePath, ct);
+        if (remote == null)
+        {
+            _logger.LogInformation("Local delete observed after remote item was already gone: {RemotePath}", remotePath);
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            return;
+        }
+
+        journalRecord ??= new SyncJournalRecord
+        {
+            FileId = SyncIdentity.RemotePathFallbackId(remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = syncItem?.IsDirectory ?? remote.IsDirectory,
+            Size = syncItem?.FileSize ?? remote.Size,
+            ETag = syncItem?.RemoteETag ?? remote.ETag,
+            BaseETag = syncItem?.RemoteETag ?? remote.ETag,
+            MTimeUtc = syncItem?.RemoteLastModified ?? (remote.LastModified == DateTime.MinValue
+                ? DateTime.UtcNow
+                : remote.LastModified.ToUniversalTime())
+        };
+        journalRecord.LocalPendingOp = SyncPendingOperations.RemoteDeleteConfirmation;
+        journalRecord.InSync = false;
+        _journal.Upsert(journalRecord);
+
+        var localizer = AppLocalizer.Instance;
+        var fileName = Path.GetFileName(localPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = Path.GetFileName(remotePath);
+
+        _problemService.Report(new SyncProblem
+        {
+            DedupeKey = SyncProblemKeys.RemoteDeleteConfirmation(localPath),
+            ProblemType = SyncProblemType.RemoteDeleteConfirmation,
+            Severity = SyncProblemSeverity.Warning,
+            Title = localizer.Format("Problem_RemoteDeleteConfirmation_Title", fileName),
+            Summary = localizer.GetString("Problem_RemoteDeleteConfirmation_Summary"),
+            Details = localizer.Format("Problem_RemoteDeleteConfirmation_Detail", remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            FirstOccurredAt = DateTime.UtcNow,
+            LastOccurredAt = DateTime.UtcNow
+        });
     }
 
     private ReconcileAction? BuildMoveRemoteAction(string newPath, string? oldPath)
@@ -661,6 +776,19 @@ public class SyncCoordinator : IDisposable
         if (action == null || action.Type == ReconcileActionType.NoOp)
             return false;
 
+        if (action.Type == ReconcileActionType.DeleteRemote &&
+            !string.Equals(
+                action.Journal?.LocalPendingOp,
+                SyncPendingOperations.RemoteDeleteConfirmation,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Blocked unconfirmed remote delete action: LocalPath={LocalPath} RemotePath={RemotePath}",
+                action.LocalPath,
+                action.RemotePath);
+            return false;
+        }
+
         var job = _propagatorQueue.Enqueue(action);
         _logger.LogInformation(
             "Queued reconcile action for propagation: Type={Type} Path={Path} OperationId={OperationId}",
@@ -686,6 +814,58 @@ public class SyncCoordinator : IDisposable
         }
 
         return _settings.SyncRootPath;
+    }
+
+    private void ClearRemoteDeletePending(SyncJournalRecord record)
+    {
+        if (string.Equals(
+                record.LocalPendingOp,
+                SyncPendingOperations.RemoteDeleteConfirmation,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            record.LocalPendingOp = null;
+            record.InSync = true;
+            _journal.Upsert(record);
+        }
+    }
+
+    private void DeleteTrackedState(
+        string localPath,
+        string remotePath,
+        SyncJournalRecord? journalRecord,
+        SyncItem? syncItem)
+    {
+        var isDirectory = journalRecord?.IsDirectory == true || syncItem?.IsDirectory == true || Directory.Exists(localPath);
+
+        if (isDirectory)
+        {
+            _stateService.DeleteChildren(localPath);
+            foreach (var record in GetJournalDescendants(localPath))
+                _journal.Delete(record.FileId);
+        }
+
+        journalRecord ??= _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        if (journalRecord != null)
+            _journal.Delete(journalRecord.FileId);
+
+        _stateService.Delete(localPath);
+    }
+
+    private IReadOnlyList<SyncJournalRecord> GetJournalDescendants(string localRoot)
+    {
+        return _journal.GetAll()
+            .Where(record => IsLocalDescendant(record.LocalPath, localRoot))
+            .ToList();
+    }
+
+    private static bool IsLocalDescendant(string candidatePath, string localRoot)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath) || string.IsNullOrWhiteSpace(localRoot))
+            return false;
+
+        var normalizedRoot = localRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return candidatePath.Length > normalizedRoot.Length &&
+               candidatePath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task ProcessPropagatorQueueAsync(CancellationToken ct)
@@ -719,6 +899,22 @@ public class SyncCoordinator : IDisposable
                             new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
                         if (action == null)
                             throw new InvalidOperationException($"Could not deserialize propagator job {job.OperationId}");
+
+                        if (action.Type == ReconcileActionType.DeleteRemote &&
+                            !string.Equals(
+                                action.Journal?.LocalPendingOp,
+                                SyncPendingOperations.RemoteDeleteConfirmation,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogWarning(
+                                "Discarding unconfirmed remote delete job and switching to confirmation flow: OperationId={OperationId} LocalPath={LocalPath} RemotePath={RemotePath}",
+                                job.OperationId,
+                                action.LocalPath,
+                                action.RemotePath);
+                            await ReportRemoteDeleteConfirmationAsync(action.LocalPath, ct);
+                            _propagatorQueue.Complete(job.OperationId);
+                            continue;
+                        }
 
                         await _retryPolicy.ExecuteAsync(
                             () => _propagator.ApplyAsync(action, ct),
@@ -1032,7 +1228,6 @@ public class SyncCoordinator : IDisposable
         _reconnectCts?.Cancel();
         _cts?.Cancel();
         _changeWatcher?.Dispose();
-        _webDavLockCoordinator.Dispose();
         _connector.Dispose();
         _db.Dispose();
         _reconnectCts?.Dispose();

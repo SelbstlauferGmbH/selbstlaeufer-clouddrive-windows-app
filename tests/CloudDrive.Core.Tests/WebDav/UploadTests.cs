@@ -53,33 +53,6 @@ public class UploadTests
     }
 
     [Fact]
-    public async Task UploadFileAsync_WithLockToken_SendsIfHeader()
-    {
-        HttpRequestMessage? capturedRequest = null;
-        var handlerMock = new Mock<HttpMessageHandler>();
-        handlerMock
-            .Protected()
-            .Setup<Task<HttpResponseMessage>>(
-                "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync((HttpRequestMessage request, CancellationToken ct) =>
-            {
-                capturedRequest = request;
-                return new HttpResponseMessage(HttpStatusCode.NoContent);
-            });
-
-        using var service = CreateService(handlerMock.Object);
-        await using var content = new MemoryStream([1, 2, 3]);
-
-        await service.UploadFileAsync("/folder/Test File.txt", content, "<opaquelocktoken:test>", CancellationToken.None);
-
-        capturedRequest.ShouldNotBeNull();
-        capturedRequest!.Headers.TryGetValues("If", out var values).ShouldBeTrue();
-        values!.Single().ShouldBe("(<opaquelocktoken:test>)");
-    }
-
-    [Fact]
     public async Task UploadFileAsync_WhenServerReturnsLocked_ThrowsWebDavLockedException()
     {
         var handlerMock = new Mock<HttpMessageHandler>();

@@ -164,6 +164,34 @@ public sealed class PropagatorTests
 
     [Fact]
     [Trait("Category", "SyncEngine")]
+    public async Task UploadNew_File_UploadsWithoutServerLocking()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "report.docx");
+        await File.WriteAllTextAsync(localPath, "content");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.UploadNew,
+            localPath,
+            "/report.docx",
+            "file-1",
+            Local: null,
+            Journal: null,
+            Remote: null), CancellationToken.None);
+
+        (await webDav.GetPropertiesAsync("/report.docx")).ShouldNotBeNull();
+        webDav.LastUploadLockToken.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
     public async Task UploadNew_File_IgnoresOfficeOwnerFile()
     {
         using var tempDir = new TempDirectory();
@@ -233,17 +261,163 @@ public sealed class PropagatorTests
         stateService.GetByLocalPath(localPath)?.SyncStatus.ShouldBe(SyncStatus.Synced);
     }
 
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task DeleteRemote_WithoutConfirmation_DoesNotDeleteRemote()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "delete-me.txt");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        webDav.AddFile("/delete-me.txt", "content", "etag-1");
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        var record = new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/delete-me.txt",
+            ETag = "etag-1",
+            Size = 7,
+            InSync = true
+        };
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.DeleteRemote,
+            localPath,
+            "/delete-me.txt",
+            "file-1",
+            Local: null,
+            Journal: record,
+            Remote: await webDav.GetPropertiesAsync("/delete-me.txt")), CancellationToken.None);
+
+        (await webDav.GetPropertiesAsync("/delete-me.txt")).ShouldNotBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task DeleteRemote_WithConfirmation_DeletesRemoteAndTrackedState()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "delete-me.txt");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        stateService.Upsert(new SyncItem
+        {
+            LocalPath = localPath,
+            RemotePath = "/delete-me.txt",
+            IsDirectory = false,
+            FileSize = 7,
+            RemoteETag = "etag-1",
+            SyncStatus = SyncStatus.Synced,
+            LastSynced = DateTime.UtcNow
+        });
+
+        var record = new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/delete-me.txt",
+            ETag = "etag-1",
+            Size = 7,
+            InSync = false,
+            LocalPendingOp = SyncPendingOperations.RemoteDeleteConfirmation
+        };
+        journal.Upsert(record);
+
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        webDav.AddFile("/delete-me.txt", "content", "etag-1");
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.DeleteRemote,
+            localPath,
+            "/delete-me.txt",
+            "file-1",
+            Local: null,
+            Journal: record,
+            Remote: await webDav.GetPropertiesAsync("/delete-me.txt")), CancellationToken.None);
+
+        (await webDav.GetPropertiesAsync("/delete-me.txt")).ShouldBeNull();
+        journal.GetByFileId("file-1").ShouldBeNull();
+        stateService.GetByLocalPath(localPath).ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task Conflict_File_CreatesLocalAndRemoteConflictCopies()
+    {
+        using var tempDir = new TempDirectory();
+        var localPath = Path.Combine(tempDir.Path, "report.docx");
+        await File.WriteAllTextAsync(localPath, "local version");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        webDav.AddFile("/report.docx", "remote version", "etag-remote");
+        var remote = await webDav.GetPropertiesAsync("/report.docx");
+        remote.ShouldNotBeNull();
+
+        var problemService = new NoopProblemService();
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService, problemService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.Conflict,
+            localPath,
+            "/report.docx",
+            "file-1",
+            Local: null,
+            Journal: new SyncJournalRecord
+            {
+                FileId = "file-1",
+                LocalPath = localPath,
+                RemotePath = "/report.docx",
+                ETag = "etag-old",
+                Size = 12,
+                InSync = true
+            },
+            Remote: remote), CancellationToken.None);
+
+        var problem = problemService.Problems.Single();
+        problem.ConflictCopyPath.ShouldNotBeNullOrWhiteSpace();
+        File.Exists(problem.ConflictCopyPath!).ShouldBeTrue();
+        (await File.ReadAllTextAsync(problem.ConflictCopyPath!)).ShouldBe("local version");
+        Path.GetFileName(problem.ConflictCopyPath!).ShouldContain(Environment.MachineName);
+        Path.GetFileName(problem.ConflictCopyPath!).ShouldContain("conflict");
+
+        var remoteCopies = await webDav.ListDirectoryAsync("/");
+        var remoteConflictCopy = remoteCopies.Single(item =>
+            item.RemotePath.Contains(Environment.MachineName, StringComparison.OrdinalIgnoreCase) &&
+            item.RemotePath.Contains("conflict", StringComparison.OrdinalIgnoreCase));
+        remoteConflictCopy.RemotePath.ShouldNotBe("/report.docx");
+
+        await using var remoteConflictStream = await webDav.DownloadFileAsync(remoteConflictCopy.RemotePath);
+        using var reader = new StreamReader(remoteConflictStream);
+        (await reader.ReadToEndAsync()).ShouldBe("local version");
+        (await webDav.GetPropertiesAsync("/report.docx")).ShouldNotBeNull();
+    }
+
     private static Propagator CreatePropagator(
         IVfs vfs,
         SyncJournal journal,
         FakeWebDavService webDav,
-        ISyncItemStateService stateService)
+        ISyncItemStateService stateService,
+        NoopProblemService? problemService = null)
     {
         return new Propagator(
             vfs,
             journal,
             webDav,
-            new NoopProblemService(),
+            problemService ?? new NoopProblemService(),
             NullLogger<Propagator>.Instance,
             stateService);
     }
@@ -252,9 +426,11 @@ public sealed class PropagatorTests
     {
         public event Action<SyncProblem>? ProblemReported;
         public event Action<string>? ProblemResolved;
+        public List<SyncProblem> Problems { get; } = [];
 
         public SyncProblem Report(SyncProblem problem)
         {
+            Problems.Add(problem);
             ProblemReported?.Invoke(problem);
             return problem;
         }

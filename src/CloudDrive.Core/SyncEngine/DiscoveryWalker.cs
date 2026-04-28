@@ -99,23 +99,23 @@ public sealed class DiscoveryWalker
 
             if (journalRecord != null)
             {
-                actions.Add(ConflictDetector.HasRemoteChanged(journalRecord, remote)
-                    ? new ReconcileAction(
-                        ReconcileActionType.Conflict,
-                        localPath,
-                        remote.RemotePath,
-                        journalRecord.FileId,
-                        Local: null,
-                        Journal: journalRecord,
-                        Remote: remote)
-                    : new ReconcileAction(
-                        ReconcileActionType.DeleteRemote,
-                        localPath,
-                        remote.RemotePath,
-                        journalRecord.FileId,
-                        Local: null,
-                        Journal: journalRecord,
-                        Remote: remote));
+                if (string.Equals(
+                        journalRecord.LocalPendingOp,
+                        SyncPendingOperations.RemoteDeleteConfirmation,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    actions.Add(ReconcileAction.NoOp(localPath, remote.RemotePath, journalRecord.FileId, null, journalRecord, remote));
+                    continue;
+                }
+
+                actions.Add(new ReconcileAction(
+                    ReconcileActionType.DownloadChanged,
+                    localPath,
+                    remote.RemotePath,
+                    journalRecord.FileId,
+                    Local: null,
+                    Journal: journalRecord,
+                    Remote: remote));
                 continue;
             }
 
@@ -127,22 +127,6 @@ public sealed class DiscoveryWalker
                 Local: null,
                 Journal: null,
                 Remote: remote));
-        }
-
-        foreach (var journalRecord in journalChildren)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (localByPath.ContainsKey(journalRecord.LocalPath) || remoteByPath.ContainsKey(journalRecord.RemotePath))
-                continue;
-
-            actions.Add(new ReconcileAction(
-                ReconcileActionType.DeleteRemote,
-                journalRecord.LocalPath,
-                journalRecord.RemotePath,
-                journalRecord.FileId,
-                Local: null,
-                Journal: journalRecord,
-                Remote: null));
         }
 
         _logger.LogDebug(

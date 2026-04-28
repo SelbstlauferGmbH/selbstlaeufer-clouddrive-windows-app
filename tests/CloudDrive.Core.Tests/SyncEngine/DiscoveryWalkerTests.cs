@@ -89,7 +89,7 @@ public class DiscoveryWalkerTests
 
     [Fact]
     [Trait("Category", "SyncEngine")]
-    public async Task WalkAsync_WhenTrackedLocalFileWasDeletedAndRemoteUnchanged_EmitsDeleteRemote()
+    public async Task WalkAsync_WhenTrackedLocalFileWasDeletedAndRemoteExists_DownloadsRemoteAgain()
     {
         using var tempDir = new TempDirectory();
         await using var vfs = new SuffixVfs(tempDir.Path);
@@ -114,9 +114,76 @@ public class DiscoveryWalkerTests
         var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
         var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
 
-        var deleteRemote = actions.Single(a => a.Type == ReconcileActionType.DeleteRemote);
-        deleteRemote.LocalPath.ShouldBe(localPath);
-        deleteRemote.RemotePath.ShouldBe("/delete-me.txt");
+        var download = actions.Single(a => a.Type == ReconcileActionType.DownloadChanged);
+        download.LocalPath.ShouldBe(localPath);
+        download.RemotePath.ShouldBe("/delete-me.txt");
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.DeleteRemote);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeleteConfirmationIsPending_DoesNotDownloadOrDelete()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+
+        webDav.AddFile("/delete-me.txt", "server", "etag-1");
+        var localPath = Path.Combine(tempDir.Path, "delete-me.txt");
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/delete-me.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = DateTime.UtcNow,
+            InSync = false,
+            LocalPendingOp = SyncPendingOperations.RemoteDeleteConfirmation
+        });
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        var noOp = actions.Single(a => a.Type == ReconcileActionType.NoOp);
+        noOp.LocalPath.ShouldBe(localPath);
+        noOp.RemotePath.ShouldBe("/delete-me.txt");
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.DeleteRemote);
+        actions.ShouldNotContain(a =>
+            a.Type == ReconcileActionType.DownloadNew ||
+            a.Type == ReconcileActionType.DownloadChanged);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenOnlyJournalRecordRemains_DoesNotEmitDeleteRemote()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = Path.Combine(tempDir.Path, "already-gone.txt"),
+            RemotePath = "/already-gone.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = DateTime.UtcNow,
+            InSync = true
+        });
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.DeleteRemote);
+        actions.ShouldNotContain(a => string.Equals(a.RemotePath, "/already-gone.txt", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

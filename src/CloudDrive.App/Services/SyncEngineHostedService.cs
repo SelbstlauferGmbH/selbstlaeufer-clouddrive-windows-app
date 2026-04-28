@@ -29,11 +29,9 @@ public class SyncEngineHostedService : BackgroundService
     private WindowsNotificationService? _windowsNotificationService;
     private EventWaitHandle? _appRunningEvent;
     private string? _syncRootPath;
-    private WebDavLockSupport _webDavLockSupport = WebDavLockSupport.NotChecked();
 
     public SyncCoordinator? Coordinator => _coordinator;
     public IWebDavService? WebDav => _webDav;
-    public WebDavLockSupport WebDavLockSupport => _webDavLockSupport;
     public MountStateMachine? StateMachine => _stateMachine;
     public event Action<SyncState>? SyncStateChanged;
     public event Action<string>? ConnectionFailed;
@@ -139,8 +137,6 @@ public class SyncEngineHostedService : BackgroundService
 
             // === Phase 2: Readiness Gate ===
             await RunReadinessGateAsync(webDav, settings, stoppingToken);
-
-            await RefreshWebDavLockSupportAsync(stoppingToken);
 
             // === Phase 3: Register and Connect ===
             _stateMachine.TransitionTo(MountPhase.Registering);
@@ -359,27 +355,6 @@ public class SyncEngineHostedService : BackgroundService
 
             await RunReadinessGateAsync(webDav, settings, ct);
         }
-    }
-
-    public async Task<WebDavLockSupport> RefreshWebDavLockSupportAsync(CancellationToken ct = default)
-    {
-        if (_webDav == null)
-            return _webDavLockSupport = WebDavLockSupport.NotChecked();
-
-        _logger.LogInformation("Checking WebDAV lock support");
-        var support = await _webDav.CheckLockSupportAsync(ct);
-        _webDavLockSupport = support;
-        _coordinator?.SetWebDavLockSupport(support);
-
-        LogActivity(support.State switch
-        {
-            WebDavLockSupportState.Supported => AppLocalizer.Instance.GetString("Activity_WebDavLockingAvailable"),
-            WebDavLockSupportState.Unsupported => AppLocalizer.Instance.GetString("Activity_WebDavLockingUnavailable"),
-            WebDavLockSupportState.ProbeFailed => AppLocalizer.Instance.GetString("Activity_WebDavLockingProbeFailed"),
-            _ => AppLocalizer.Instance.GetString("Activity_WebDavLockingNotChecked")
-        });
-
-        return support;
     }
 
     private async Task RunShutdownAsync()

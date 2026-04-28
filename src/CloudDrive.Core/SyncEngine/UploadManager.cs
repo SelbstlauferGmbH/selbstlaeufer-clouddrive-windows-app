@@ -176,14 +176,19 @@ public class UploadManager
             return;
         }
 
-        _logger.LogInformation("DELETE remote: {Path}", item.RemotePath);
-        await _webDav.DeleteAsync(item.RemotePath, ct);
-        _problemService?.ResolveByDedupeKey(SyncProblemKeys.Upload(localPath));
+        var remoteItem = await _webDav.GetPropertiesAsync(item.RemotePath, ct);
+        if (remoteItem == null)
+        {
+            if (item.IsDirectory)
+                _stateService.DeleteChildren(localPath);
+            _stateService.Delete(localPath);
+            DeleteJournalForItem(item);
+            _problemService?.ResolveByDedupeKey(SyncProblemKeys.Upload(localPath));
+            return;
+        }
 
-        if (item.IsDirectory)
-            _stateService.DeleteChildren(localPath);
-        _stateService.Delete(localPath);
-        DeleteJournalForItem(item);
+        MarkJournalRemoteDeleteConfirmation(localPath, item, remoteItem);
+        ReportRemoteDeleteConfirmation(localPath, item.RemotePath);
     }
 
     private async Task HandleRenameAsync(string newPath, string oldPath, CancellationToken ct)
@@ -332,6 +337,55 @@ public class UploadManager
         var record = _journal.GetByLocalPath(item.LocalPath) ?? _journal.GetByRemotePath(item.RemotePath);
         if (record != null)
             _journal.Delete(record.FileId);
+    }
+
+    private void MarkJournalRemoteDeleteConfirmation(string localPath, SyncItem item, RemoteItem remoteItem)
+    {
+        if (_journal == null)
+            return;
+
+        var record = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(item.RemotePath) ?? new SyncJournalRecord
+        {
+            FileId = SyncIdentity.RemotePathFallbackId(item.RemotePath),
+            LocalPath = localPath,
+            RemotePath = item.RemotePath,
+            IsDirectory = item.IsDirectory,
+            Size = item.FileSize,
+            ETag = item.RemoteETag ?? remoteItem.ETag,
+            BaseETag = item.RemoteETag ?? remoteItem.ETag,
+            MTimeUtc = item.RemoteLastModified ?? (remoteItem.LastModified == DateTime.MinValue
+                ? DateTime.UtcNow
+                : remoteItem.LastModified.ToUniversalTime())
+        };
+
+        record.LocalPendingOp = SyncPendingOperations.RemoteDeleteConfirmation;
+        record.InSync = false;
+        _journal.Upsert(record);
+    }
+
+    private void ReportRemoteDeleteConfirmation(string localPath, string remotePath)
+    {
+        if (_problemService == null)
+        {
+            _logger.LogWarning("Remote delete confirmation cannot be shown because no problem service is available: {Path}", localPath);
+            return;
+        }
+
+        var localizer = AppLocalizer.Instance;
+        var fileName = Path.GetFileName(localPath);
+        _problemService.Report(new SyncProblem
+        {
+            DedupeKey = SyncProblemKeys.RemoteDeleteConfirmation(localPath),
+            ProblemType = SyncProblemType.RemoteDeleteConfirmation,
+            Severity = SyncProblemSeverity.Warning,
+            Title = localizer.Format("Problem_RemoteDeleteConfirmation_Title", fileName),
+            Summary = localizer.GetString("Problem_RemoteDeleteConfirmation_Summary"),
+            Details = localizer.Format("Problem_RemoteDeleteConfirmation_Detail", remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            FirstOccurredAt = DateTime.UtcNow,
+            LastOccurredAt = DateTime.UtcNow
+        });
     }
 
     private void RefreshPlaceholderIdentity(

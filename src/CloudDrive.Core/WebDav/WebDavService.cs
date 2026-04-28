@@ -225,10 +225,7 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         }
     }
 
-    public Task<string?> UploadFileAsync(string remotePath, Stream content, CancellationToken ct = default) =>
-        UploadFileAsync(remotePath, content, lockToken: null, ct);
-
-    public async Task<string?> UploadFileAsync(string remotePath, Stream content, string? lockToken, CancellationToken ct = default)
+    public async Task<string?> UploadFileAsync(string remotePath, Stream content, CancellationToken ct = default)
     {
         var localizer = AppLocalizer.Instance;
         var url = BuildUrl(remotePath);
@@ -246,7 +243,6 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         {
             Content = streamContent
         };
-        AddLockTokenIfPresent(request, lockToken);
 
         await _rateLimiter.WaitAsync(ct);
         var sw = Stopwatch.StartNew();
@@ -274,10 +270,7 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         }
     }
 
-    public Task DeleteAsync(string remotePath, CancellationToken ct = default) =>
-        DeleteAsync(remotePath, lockToken: null, ct);
-
-    public async Task DeleteAsync(string remotePath, string? lockToken, CancellationToken ct = default)
+    public async Task DeleteAsync(string remotePath, CancellationToken ct = default)
     {
         var localizer = AppLocalizer.Instance;
         var url = BuildUrl(remotePath);
@@ -291,7 +284,6 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         await _rateLimiter.WaitAsync(ct);
         var sw = Stopwatch.StartNew();
         using var request = new HttpRequestMessage(HttpMethod.Delete, url);
-        AddLockTokenIfPresent(request, lockToken);
         var response = await _httpClient.SendAsync(request, ct);
         sw.Stop();
         _logger.LogDebug("WEBDAV_RESPONSE DELETE {Url} {StatusCode} {DurationMs}ms",
@@ -321,10 +313,7 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         }
     }
 
-    public Task MoveAsync(string fromPath, string toPath, CancellationToken ct = default) =>
-        MoveAsync(fromPath, toPath, lockToken: null, ct);
-
-    public async Task MoveAsync(string fromPath, string toPath, string? lockToken, CancellationToken ct = default)
+    public async Task MoveAsync(string fromPath, string toPath, CancellationToken ct = default)
     {
         var fromUrl = BuildUrl(fromPath);
         var toUrl = BuildUrl(toPath);
@@ -333,7 +322,6 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         var request = new HttpRequestMessage(new HttpMethod("MOVE"), fromUrl);
         request.Headers.Add("Destination", toUrl);
         request.Headers.Add("Overwrite", "F");
-        AddLockTokenIfPresent(request, lockToken);
 
         await _rateLimiter.WaitAsync(ct);
         var sw = Stopwatch.StartNew();
@@ -361,179 +349,6 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         if (response.StatusCode == HttpStatusCode.MethodNotAllowed)
             return;
         response.EnsureSuccessStatusCode();
-    }
-
-    public async Task<WebDavLockInfo> LockAsync(string remotePath, WebDavLockRequest request, CancellationToken ct = default)
-    {
-        var url = BuildUrl(remotePath);
-        var timeout = NormalizeLockTimeout(request.Timeout);
-        _logger.LogDebug("WEBDAV_REQUEST LOCK {Url} Timeout={TimeoutSeconds}s", url, (int)timeout.TotalSeconds);
-
-        var body = $"""
-        <?xml version="1.0" encoding="utf-8"?>
-        <D:lockinfo xmlns:D="DAV:">
-          <D:lockscope><D:exclusive/></D:lockscope>
-          <D:locktype><D:write/></D:locktype>
-          <D:owner>{SecurityElementEscape(request.Owner)}</D:owner>
-        </D:lockinfo>
-        """;
-
-        using var httpRequest = new HttpRequestMessage(new HttpMethod("LOCK"), url);
-        httpRequest.Headers.TryAddWithoutValidation("Timeout", $"Second-{(int)timeout.TotalSeconds}");
-        httpRequest.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/xml");
-
-        await _rateLimiter.WaitAsync(ct);
-        var sw = Stopwatch.StartNew();
-        var response = await _httpClient.SendAsync(httpRequest, ct);
-        sw.Stop();
-        _logger.LogDebug("WEBDAV_RESPONSE LOCK {Url} {StatusCode} {DurationMs}ms",
-            url, (int)response.StatusCode, sw.ElapsedMilliseconds);
-
-        ThrowIfLocked(remotePath, response);
-        response.EnsureSuccessStatusCode();
-
-        var token = await ReadLockTokenAsync(response, ct);
-        if (string.IsNullOrWhiteSpace(token))
-            throw new WebDavLockException(remotePath, response.StatusCode, $"WebDAV LOCK response did not contain a lock token for {remotePath}.");
-
-        return new WebDavLockInfo(remotePath, NormalizeLockToken(token), DateTimeOffset.UtcNow.Add(timeout));
-    }
-
-    public async Task<WebDavLockInfo> RefreshLockAsync(string remotePath, string lockToken, TimeSpan timeout, CancellationToken ct = default)
-    {
-        var url = BuildUrl(remotePath);
-        var normalizedToken = NormalizeLockToken(lockToken);
-        var normalizedTimeout = NormalizeLockTimeout(timeout);
-        _logger.LogDebug("WEBDAV_REQUEST LOCK refresh {Url} Timeout={TimeoutSeconds}s", url, (int)normalizedTimeout.TotalSeconds);
-
-        using var request = new HttpRequestMessage(new HttpMethod("LOCK"), url);
-        request.Headers.TryAddWithoutValidation("If", $"({normalizedToken})");
-        request.Headers.TryAddWithoutValidation("Timeout", $"Second-{(int)normalizedTimeout.TotalSeconds}");
-
-        await _rateLimiter.WaitAsync(ct);
-        var sw = Stopwatch.StartNew();
-        var response = await _httpClient.SendAsync(request, ct);
-        sw.Stop();
-        _logger.LogDebug("WEBDAV_RESPONSE LOCK refresh {Url} {StatusCode} {DurationMs}ms",
-            url, (int)response.StatusCode, sw.ElapsedMilliseconds);
-
-        ThrowIfLocked(remotePath, response);
-        response.EnsureSuccessStatusCode();
-
-        return new WebDavLockInfo(remotePath, normalizedToken, DateTimeOffset.UtcNow.Add(normalizedTimeout));
-    }
-
-    public async Task UnlockAsync(string remotePath, string lockToken, CancellationToken ct = default)
-    {
-        var url = BuildUrl(remotePath);
-        var normalizedToken = NormalizeLockToken(lockToken);
-        _logger.LogDebug("WEBDAV_REQUEST UNLOCK {Url}", url);
-
-        using var request = new HttpRequestMessage(new HttpMethod("UNLOCK"), url);
-        request.Headers.TryAddWithoutValidation("Lock-Token", normalizedToken);
-
-        await _rateLimiter.WaitAsync(ct);
-        var sw = Stopwatch.StartNew();
-        var response = await _httpClient.SendAsync(request, ct);
-        sw.Stop();
-        _logger.LogDebug("WEBDAV_RESPONSE UNLOCK {Url} {StatusCode} {DurationMs}ms",
-            url, (int)response.StatusCode, sw.ElapsedMilliseconds);
-
-        if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == LockedStatusCode)
-            return;
-
-        response.EnsureSuccessStatusCode();
-    }
-
-    public async Task<WebDavLockSupport> CheckLockSupportAsync(CancellationToken ct = default)
-    {
-        var probePath = $"/.clouddrive-lock-probe-{Guid.NewGuid():N}.tmp";
-        WebDavLockInfo? lockInfo = null;
-        var deleted = false;
-
-        try
-        {
-            lockInfo = await LockAsync(
-                probePath,
-                new WebDavLockRequest("CloudDrive WebDAV lock capability probe", TimeSpan.FromSeconds(30)),
-                ct);
-
-            await using var content = new MemoryStream();
-            await UploadFileAsync(probePath, content, lockInfo.Token, ct);
-
-            if (!await RejectsUnprotectedWriteToLockedResourceAsync(probePath, ct))
-            {
-                await DeleteAsync(probePath, lockInfo.Token, ct);
-                deleted = true;
-                return WebDavLockSupport.Unsupported(
-                    "WebDAV LOCK succeeded, but the server accepted an unprotected write to the locked probe resource.");
-            }
-
-            await DeleteAsync(probePath, lockInfo.Token, ct);
-            deleted = true;
-
-            return WebDavLockSupport.Supported("WebDAV LOCK enforcement, token-protected PUT, and token-protected DELETE succeeded.");
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (WebDavLockException ex)
-        {
-            return WebDavLockSupport.Unsupported(BuildLockSupportFailureDetail(ex));
-        }
-        catch (HttpRequestException ex)
-        {
-            return ex.StatusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented
-                ? WebDavLockSupport.Unsupported(BuildLockSupportFailureDetail(ex))
-                : WebDavLockSupport.ProbeFailed(BuildLockSupportFailureDetail(ex));
-        }
-        catch (Exception ex)
-        {
-            return WebDavLockSupport.ProbeFailed(ex.Message);
-        }
-        finally
-        {
-            if (lockInfo != null)
-            {
-                if (!deleted)
-                {
-                    try { await DeleteAsync(probePath, lockInfo.Token, CancellationToken.None); }
-                    catch (Exception ex) { _logger.LogDebug(ex, "Failed to delete WebDAV lock probe resource: {RemotePath}", probePath); }
-                }
-
-                try { await UnlockAsync(probePath, lockInfo.Token, CancellationToken.None); }
-                catch (Exception ex) { _logger.LogDebug(ex, "Failed to unlock WebDAV lock probe resource: {RemotePath}", probePath); }
-            }
-        }
-    }
-
-    private async Task<bool> RejectsUnprotectedWriteToLockedResourceAsync(string remotePath, CancellationToken ct)
-    {
-        var url = BuildUrl(remotePath);
-        _logger.LogDebug("WEBDAV_REQUEST PUT lock enforcement probe {Url}", url);
-
-        using var request = new HttpRequestMessage(HttpMethod.Put, url)
-        {
-            Content = new ByteArrayContent(new byte[] { 0x43, 0x44 })
-        };
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-        await _rateLimiter.WaitAsync(ct);
-        var sw = Stopwatch.StartNew();
-        var response = await _httpClient.SendAsync(request, ct);
-        sw.Stop();
-        _logger.LogDebug("WEBDAV_RESPONSE PUT lock enforcement probe {Url} {StatusCode} {DurationMs}ms",
-            url, (int)response.StatusCode, sw.ElapsedMilliseconds);
-
-        if (response.StatusCode == LockedStatusCode || response.StatusCode == HttpStatusCode.PreconditionFailed)
-            return true;
-
-        if (response.IsSuccessStatusCode)
-            return false;
-
-        response.EnsureSuccessStatusCode();
-        return false;
     }
 
     public async Task<RemoteItem?> GetPropertiesAsync(string remotePath, CancellationToken ct = default)
@@ -691,75 +506,10 @@ public class WebDavService : ISyncCollectionWebDavService, IDisposable
         return new Uri(baseUri, encodedRelativePath).AbsoluteUri;
     }
 
-    private static void AddLockTokenIfPresent(HttpRequestMessage request, string? lockToken)
-    {
-        if (string.IsNullOrWhiteSpace(lockToken))
-            return;
-
-        request.Headers.TryAddWithoutValidation("If", $"({NormalizeLockToken(lockToken)})");
-    }
-
     private static void ThrowIfLocked(string remotePath, HttpResponseMessage response)
     {
         if (response.StatusCode == LockedStatusCode)
             throw new WebDavLockedException(remotePath, $"WebDAV resource is locked: {remotePath}");
-    }
-
-    private static TimeSpan NormalizeLockTimeout(TimeSpan timeout)
-    {
-        if (timeout <= TimeSpan.Zero)
-            return TimeSpan.FromMinutes(10);
-
-        return timeout < TimeSpan.FromSeconds(30)
-            ? TimeSpan.FromSeconds(30)
-            : timeout;
-    }
-
-    private static string NormalizeLockToken(string lockToken)
-    {
-        var trimmed = lockToken.Trim();
-        if (trimmed.StartsWith('<') && trimmed.EndsWith('>'))
-            return trimmed;
-
-        return $"<{trimmed.Trim('<', '>')}>";
-    }
-
-    private static string SecurityElementEscape(string value) =>
-        System.Security.SecurityElement.Escape(value) ?? string.Empty;
-
-    private static string BuildLockSupportFailureDetail(HttpRequestException ex)
-    {
-        return ex.StatusCode.HasValue
-            ? $"WebDAV lock probe failed with HTTP {(int)ex.StatusCode.Value} {ex.StatusCode.Value}."
-            : ex.Message;
-    }
-
-    private static async Task<string?> ReadLockTokenAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        if (response.Headers.TryGetValues("Lock-Token", out var tokenValues))
-        {
-            var token = tokenValues.FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(token))
-                return token;
-        }
-
-        var responseBody = await response.Content.ReadAsStringAsync(ct);
-        if (string.IsNullOrWhiteSpace(responseBody))
-            return null;
-
-        try
-        {
-            var doc = XDocument.Parse(responseBody);
-            return doc
-                .Descendants(DavNs + "locktoken")
-                .Elements(DavNs + "href")
-                .Select(element => element.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private async Task LogNotFoundResponseAsync(

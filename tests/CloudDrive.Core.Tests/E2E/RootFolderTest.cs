@@ -1,3 +1,4 @@
+using CloudDrive.Core.Data;
 using CloudDrive.Core.Tests.Infrastructure;
 using Shouldly;
 
@@ -44,6 +45,70 @@ public class RootFolderTest : IClassFixture<E2ETestFixture>
             var isDir = Directory.Exists(entry);
             Console.WriteLine($"  {(isDir ? "[DIR]" : "[FILE]")} {Path.GetFileName(entry)}");
         }
+    }
+
+    [Fact]
+    public async Task Startup_WithPreExistingRemoteTree_ProjectsLocalPlaceholdersAndDoesNotDeleteRemote()
+    {
+        var syncRoot = _fx.SyncRootPath;
+
+        Console.WriteLine($"[RootFolderTest] Validating pre-existing remote seed tree: {_fx.RemoteSeedPrefix}");
+
+        Directory.GetFileSystemEntries(syncRoot);
+        await WaitForProjectedAsync(
+            _fx.RemoteSeedItems.Where(item => GetParentRelativePath(item.RelativePath).Length == 0),
+            Timeout);
+
+        foreach (var directory in _fx.RemoteSeedItems
+                     .Where(item => item.IsDirectory)
+                     .OrderBy(item => item.RelativePath.Count(ch => ch == '/')))
+        {
+            var localDirectory = ToLocalPath(syncRoot, directory.RelativePath);
+            Directory.Exists(localDirectory).ShouldBeTrue(
+                $"Seeded remote directory '{directory.RemotePath}' should be projected locally");
+
+            Directory.GetFileSystemEntries(localDirectory);
+            await WaitForProjectedAsync(
+                _fx.RemoteSeedItems.Where(item => GetParentRelativePath(item.RelativePath) == directory.RelativePath),
+                Timeout);
+        }
+
+        foreach (var item in _fx.RemoteSeedItems)
+        {
+            var localPath = ToLocalPath(syncRoot, item.RelativePath);
+            var dbEntry = _fx.Db.GetByLocalPath(localPath);
+            dbEntry.ShouldNotBeNull($"Seeded remote item '{item.RemotePath}' should be tracked locally");
+            dbEntry!.RemotePath.ShouldBe(item.RemotePath);
+
+            var remote = await _fx.WebDav.GetPropertiesAsync(item.RemotePath);
+            remote.ShouldNotBeNull($"Seeded remote item '{item.RemotePath}' must still exist remotely");
+            remote!.IsDirectory.ShouldBe(item.IsDirectory);
+
+            if (item.IsDirectory)
+            {
+                Directory.Exists(localPath).ShouldBeTrue();
+                continue;
+            }
+
+            File.Exists(localPath).ShouldBeTrue(
+                $"Seeded remote file '{item.RemotePath}' should be projected as a local placeholder");
+            var content = await File.ReadAllTextAsync(localPath);
+            content.ShouldBe(item.Content);
+        }
+
+        var seedDeletes = _fx.LogSink.GetByMessage("DELETE")
+            .Where(e => e.Category.Contains("WebDav") &&
+                        e.Message.Contains(_fx.RemoteSeedPrefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        seedDeletes.ShouldBeEmpty("Startup must not issue WebDAV DELETE for pre-existing remote seed data");
+
+        var deleteProblems = _fx.Db.GetProblems(openOnly: true)
+            .Where(problem => problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation)
+            .Where(problem =>
+                (problem.LocalPath?.Contains(_fx.RemoteSeedPrefix, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (problem.RemotePath?.Contains(_fx.RemoteSeedPrefix, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+        deleteProblems.ShouldBeEmpty("Pre-existing remote seed data must not be treated as a local-delete conflict");
     }
 
     [Fact]
@@ -119,5 +184,49 @@ public class RootFolderTest : IClassFixture<E2ETestFixture>
             $"Root folder should open quickly, but took {stopwatch.Elapsed.TotalSeconds:F2}s");
         
         Console.WriteLine($"[RootFolderTest] Root folder opened in {stopwatch.Elapsed.TotalSeconds:F2}s with {entries.Length} entries");
+    }
+
+    private async Task WaitForProjectedAsync(IEnumerable<RemoteSeedItem> expectedItems, TimeSpan timeout)
+    {
+        var expected = expectedItems.ToList();
+        if (expected.Count == 0)
+            return;
+
+        var deadline = DateTime.UtcNow + timeout;
+        List<string> missing = [];
+        while (DateTime.UtcNow < deadline)
+        {
+            missing = expected
+                .Where(item => !IsProjected(item))
+                .Select(item => item.RelativePath)
+                .ToList();
+
+            if (missing.Count == 0)
+                return;
+
+            await Task.Delay(250);
+        }
+
+        throw new TimeoutException(
+            $"Timed out waiting for remote seed item(s) to project locally: {string.Join(", ", missing)}");
+    }
+
+    private bool IsProjected(RemoteSeedItem item)
+    {
+        var localPath = ToLocalPath(_fx.SyncRootPath, item.RelativePath);
+        var exists = item.IsDirectory ? Directory.Exists(localPath) : File.Exists(localPath);
+        return exists && _fx.Db.GetByLocalPath(localPath) != null;
+    }
+
+    private static string ToLocalPath(string root, string relativePath)
+    {
+        var segments = relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return Path.Combine([root, ..segments]);
+    }
+
+    private static string GetParentRelativePath(string relativePath)
+    {
+        var index = relativePath.LastIndexOf('/');
+        return index <= 0 ? string.Empty : relativePath[..index];
     }
 }

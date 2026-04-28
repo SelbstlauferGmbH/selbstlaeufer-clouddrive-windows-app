@@ -474,18 +474,6 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Activity_CloudDriveReady" xml:space="preserve">
     <value>CloudDrive ist bereit</value>
   </data>
-  <data name="Activity_WebDavLockingAvailable" xml:space="preserve">
-    <value>WebDAV-Server-Sperren sind verfügbar</value>
-  </data>
-  <data name="Activity_WebDavLockingUnavailable" xml:space="preserve">
-    <value>WebDAV-Server-Sperren sind nicht verfügbar</value>
-  </data>
-  <data name="Activity_WebDavLockingProbeFailed" xml:space="preserve">
-    <value>Prüfung der WebDAV-Server-Sperren fehlgeschlagen</value>
-  </data>
-  <data name="Activity_WebDavLockingNotChecked" xml:space="preserve">
-    <value>WebDAV-Server-Sperren wurden nicht geprüft</value>
-  </data>
   <data name="Activity_Deleting" xml:space="preserve">
     <value>{0} wird gelöscht</value>
   </data>
@@ -828,30 +816,6 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="HealthCheck_WebDav_Name" xml:space="preserve">
     <value>WebDAV-Verbindung</value>
   </data>
-  <data name="HealthCheck_WebDavLock_Name" xml:space="preserve">
-    <value>WebDAV-Server-Sperren</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Status_Available" xml:space="preserve">
-    <value>Verfügbar</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Status_Unavailable" xml:space="preserve">
-    <value>Nicht verfügbar</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Status_ProbeFailed" xml:space="preserve">
-    <value>Prüfung fehlgeschlagen</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Detail_Available" xml:space="preserve">
-    <value>Der Server hat einen WebDAV-LOCK und einen token-geschützten Probe-Schreibvorgang akzeptiert. CloudDrive verwendet Server-Sperren für Office-Dateien.</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Detail_Unavailable" xml:space="preserve">
-    <value>Der Server konnte WebDAV-Sperren nicht nachweisen. CloudDrive synchronisiert normal ohne serverseitige Bearbeitungssperren.</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Detail_ProbeFailed" xml:space="preserve">
-    <value>CloudDrive konnte die WebDAV-Sperren-Prüfung nicht abschließen. Serverseitige Bearbeitungssperren sind für diese Sitzung deaktiviert.</value>
-  </data>
-  <data name="HealthCheck_WebDavLock_Detail_NotChecked" xml:space="preserve">
-    <value>WebDAV-Sperren wurden noch nicht geprüft.</value>
-  </data>
   <data name="HealthCheck_Updater_Name" xml:space="preserve">
     <value>Updater</value>
   </data>
@@ -1032,6 +996,12 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_Action_HealthCheck" xml:space="preserve">
     <value>Integritätsprüfung öffnen</value>
   </data>
+  <data name="Problem_Action_DeleteRemote" xml:space="preserve">
+    <value>Auf dem Server löschen</value>
+  </data>
+  <data name="Problem_Action_KeepRemote" xml:space="preserve">
+    <value>Remote-Kopie behalten</value>
+  </data>
   <data name="Problem_CannotReachServer_Title" xml:space="preserve">
     <value>Server nicht erreichbar</value>
   </data>
@@ -1089,6 +1059,15 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_RemoteSync_Summary" xml:space="preserve">
     <value>Der Remote-Synchronisierungslauf ist fehlgeschlagen und wird erneut versucht.</value>
   </data>
+  <data name="Problem_RemoteDeleteConfirmation_Title" xml:space="preserve">
+    <value>{0} vom Server löschen?</value>
+  </data>
+  <data name="Problem_RemoteDeleteConfirmation_Summary" xml:space="preserve">
+    <value>Die Datei wurde lokal gelöscht. CloudDrive wartet auf Bestätigung, bevor sie remote gelöscht wird.</value>
+  </data>
+  <data name="Problem_RemoteDeleteConfirmation_Detail" xml:space="preserve">
+    <value>Remote-Pfad: {0}</value>
+  </data>
   <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
     <value>{0} konnte auf dem Server nicht gelöscht werden</value>
   </data>
@@ -1130,6 +1109,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Problem_Kind_RemoteLock" xml:space="preserve">
     <value>Server-Sperre</value>
+  </data>
+  <data name="Problem_Kind_RemoteDeleteConfirmation" xml:space="preserve">
+    <value>Löschbestätigung</value>
   </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>

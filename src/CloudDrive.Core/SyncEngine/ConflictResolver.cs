@@ -53,7 +53,11 @@ public class ConflictResolver
         if (existingItem != null && !HasRemoteVersionChanged(existingItem, remoteItem))
             return false;
 
-        var conflictCopyPath = GenerateUniqueConflictPath(localPath);
+        var conflictCopyPath = ConflictCopyNamer.CreateUniqueLocalPath(localPath);
+        var remoteConflictPath = await ConflictCopyNamer.CreateUniqueRemotePathAsync(
+            remotePath,
+            async (candidate, token) => await _webDav.GetPropertiesAsync(candidate, token) != null,
+            ct);
         var tempDownloadPath = Path.Combine(
             Path.GetDirectoryName(localPath)!,
             $".clouddrive-remote-{Guid.NewGuid():N}.tmp");
@@ -67,6 +71,16 @@ public class ConflictResolver
         _projectionService.SuppressWatcherEvents(conflictCopyPath);
 
         File.Copy(localPath, conflictCopyPath, overwrite: false);
+        await using (var localCopyStream = new FileStream(
+                         conflictCopyPath,
+                         FileMode.Open,
+                         FileAccess.Read,
+                         FileShare.Read,
+                         81920,
+                         FileOptions.Asynchronous | FileOptions.SequentialScan))
+        {
+            await _webDav.UploadFileAsync(remoteConflictPath, localCopyStream, ct);
+        }
 
         try
         {
@@ -98,7 +112,7 @@ public class ConflictResolver
         trackedItem.SyncStatus = SyncStatus.Synced;
         trackedItem.LastSynced = DateTime.UtcNow;
         _stateService.Upsert(trackedItem);
-        UpsertJournalConflict(existingItem, localPath, remotePath, remoteItem, restoredFileInfo.Length, trackedItem.LocalHash);
+        UpsertJournalConflict(existingItem, localPath, remotePath, remoteConflictPath, remoteItem, restoredFileInfo.Length, trackedItem.LocalHash);
         _projectionService.ScheduleMarkInSync(localPath);
 
         var localizer = AppLocalizer.Instance;
@@ -130,6 +144,7 @@ public class ConflictResolver
         SyncItem? existingItem,
         string localPath,
         string remotePath,
+        string remoteConflictPath,
         RemoteItem remoteItem,
         long restoredSize,
         string? checksum)
@@ -164,6 +179,7 @@ public class ConflictResolver
             RemoteMTimeUtc = remoteItem.LastModified == DateTime.MinValue ? null : remoteItem.LastModified.ToUniversalTime(),
             RemoteSize = remoteItem.Size,
             LocalSize = restoredSize,
+            RemoteTempPath = remoteConflictPath,
             Status = PendingConflictStatus.Pending
         });
     }
@@ -191,26 +207,4 @@ public class ConflictResolver
         return false;
     }
 
-    private static string GenerateUniqueConflictPath(string localPath)
-    {
-        var directory = Path.GetDirectoryName(localPath)!;
-        var baseName = Path.GetFileNameWithoutExtension(localPath);
-        var extension = Path.GetExtension(localPath);
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm");
-        var machineName = Environment.MachineName;
-
-        var candidate = Path.Combine(directory, $"{baseName} (conflict {timestamp} {machineName}){extension}");
-        if (!File.Exists(candidate) && !Directory.Exists(candidate))
-            return candidate;
-
-        var suffix = 2;
-        while (true)
-        {
-            var numbered = Path.Combine(directory, $"{baseName} (conflict {timestamp} {machineName} {suffix}){extension}");
-            if (!File.Exists(numbered) && !Directory.Exists(numbered))
-                return numbered;
-
-            suffix++;
-        }
-    }
 }

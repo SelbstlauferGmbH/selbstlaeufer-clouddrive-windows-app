@@ -163,7 +163,7 @@ public class FullLifecycleTest : IClassFixture<E2ETestFixture>
             "File should be fully hydrated after reading (no RECALL_ON_DATA_ACCESS)");
 
         // ──────────────────────────────────────────────
-        // STEP 5: Delete the test file
+        // STEP 5: Delete the test file locally
         // ──────────────────────────────────────────────
         // This triggers: LocalChangeWatcher detects delete → UploadManager sends
         // DELETE to WebDAV. Also cfapi may fire NOTIFY_DELETE callback.
@@ -171,31 +171,23 @@ public class FullLifecycleTest : IClassFixture<E2ETestFixture>
         Console.WriteLine($"[Step 5] Deleting test file: {testFileName}");
         File.Delete(testFilePath);
 
-        // FIX: Wait for the actual WebDAV DELETE response instead of any generic DELETE.
-        // The cfapi NOTIFY_DELETE callback fires instantly when the file is deleted,
-        // but the LocalChangeWatcher has a 2-second debounce before queuing the change
-        // to UploadManager, which then calls WebDavService.DeleteAsync.
-        // Waiting for "WEBDAV_RESPONSE DELETE" ensures the HTTP DELETE actually completed.
-        await _fx.LogSink.WaitForAsync(
-            e => e.Message.Contains("WEBDAV_RESPONSE DELETE") && e.Message.Contains(testFileName),
+        var deleteProblem = await WaitForProblem(
+            problem => problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation &&
+                       string.Equals(problem.LocalPath, testFilePath, StringComparison.OrdinalIgnoreCase),
             TimeSpan.FromSeconds(60));
 
         // Verify: file no longer exists locally
         File.Exists(testFilePath).ShouldBeFalse("File should be deleted locally");
 
-        // Verify: file removed from DB (or marked as deleted)
-        var deletedItem = _fx.Db.GetByLocalPath(testFilePath);
-        // Item should either be null (removed) or have an appropriate status
-        if (deletedItem != null)
-            Console.WriteLine($"[Step 5] DB still has entry with status: {deletedItem.SyncStatus}");
-        else
-            Console.WriteLine("[Step 5] DB entry removed");
+        deleteProblem.RemotePath.ShouldNotBeNullOrWhiteSpace();
+        deleteProblem.RemotePath!.ShouldContain(testFileName);
+        Console.WriteLine("[Step 5] Remote delete confirmation recorded");
 
-        // Verify: WebDAV DELETE was issued
+        // Verify: no WebDAV DELETE was issued for the file without confirmation.
         var webdavDeletes = _fx.LogSink.GetByMessage("DELETE")
-            .Where(e => e.Category.Contains("WebDav"))
+            .Where(e => e.Category.Contains("WebDav") && e.Message.Contains(testFileName))
             .ToList();
-        webdavDeletes.ShouldNotBeEmpty("A WebDAV DELETE request should have been sent");
+        webdavDeletes.ShouldBeEmpty("A WebDAV DELETE request must not be sent before confirmation");
 
         // ──────────────────────────────────────────────
         // FINAL: Print diagnostic summary
@@ -232,5 +224,20 @@ public class FullLifecycleTest : IClassFixture<E2ETestFixture>
                 $"File '{Path.GetFileName(localPath)}' did not reach status '{expected}' within {timeout.TotalSeconds}s. " +
                 $"Current: {item?.SyncStatus.ToString() ?? "not in DB"}");
         }
+    }
+
+    private async Task<SyncProblem> WaitForProblem(Func<SyncProblem, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var problem = _fx.Db.GetProblems(openOnly: true).FirstOrDefault(predicate);
+            if (problem != null)
+                return problem;
+
+            await Task.Delay(250);
+        }
+
+        throw new TimeoutException($"Timed out waiting for matching problem after {timeout.TotalSeconds:0}s");
     }
 }

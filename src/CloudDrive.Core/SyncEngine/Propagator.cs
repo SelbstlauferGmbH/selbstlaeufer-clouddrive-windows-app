@@ -19,7 +19,6 @@ public sealed class Propagator
     private readonly ISyncProblemService _problemService;
     private readonly ISyncItemStateService? _stateService;
     private readonly ExplorerItemStateService? _explorerItemStateService;
-    private readonly IWebDavLockCoordinator? _lockCoordinator;
     private readonly ILogger<Propagator> _logger;
 
     public Propagator(
@@ -29,8 +28,7 @@ public sealed class Propagator
         ISyncProblemService problemService,
         ILogger<Propagator> logger,
         ISyncItemStateService? stateService = null,
-        ExplorerItemStateService? explorerItemStateService = null,
-        IWebDavLockCoordinator? lockCoordinator = null)
+        ExplorerItemStateService? explorerItemStateService = null)
     {
         _vfs = vfs;
         _journal = journal;
@@ -39,7 +37,6 @@ public sealed class Propagator
         _logger = logger;
         _stateService = stateService;
         _explorerItemStateService = explorerItemStateService;
-        _lockCoordinator = lockCoordinator;
     }
 
     public async Task ApplyAsync(ReconcileAction action, CancellationToken ct)
@@ -130,12 +127,11 @@ public sealed class Propagator
         if (!string.IsNullOrWhiteSpace(parentRemote) && parentRemote != "/")
             await _webDav.CreateDirectoryAsync(parentRemote, ct);
 
-        await using var writeLock = await AcquireWriteLockAsync(action.LocalPath, action.RemotePath, ct);
         await using var fileStream = OpenSharedReadStream(action.LocalPath);
         if (fileStream.Length != snapshot.Length)
             throw FileChangedDuringUpload(action.LocalPath);
 
-        var etag = await _webDav.UploadFileAsync(action.RemotePath, fileStream, writeLock.Token, ct);
+        var etag = await _webDav.UploadFileAsync(action.RemotePath, fileStream, ct);
         var uploadedSnapshot = GetAccessibleFileSnapshot(action.LocalPath);
         if (uploadedSnapshot != snapshot)
             throw FileChangedDuringUpload(action.LocalPath);
@@ -174,7 +170,6 @@ public sealed class Propagator
         await EnsureUploadPlaceholderMetadataAsync(action.LocalPath, metadata, ct);
         await RequireUploadInSyncAsync(action.LocalPath, ct);
         UpsertJournal(action with { FileId = metadata.FileId }, uploadedRemote, isDirectory: false, uploadedRemoteSize, checksum, uploadedRemoteEtag, uploadedRemoteMTime);
-        await NotifyUploadSucceededAsync(action.LocalPath, action.RemotePath, ct);
         await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
         _logger.LogInformation(
             "Propagated local file upload: {LocalPath} -> {RemotePath} Size={Size}",
@@ -372,8 +367,7 @@ public sealed class Propagator
 
         var previousLocalPath = action.PreviousLocalPath ?? action.Journal?.LocalPath ?? action.LocalPath;
         var previousSyncItem = _stateService?.GetByLocalPath(previousLocalPath);
-        await using var writeLock = await AcquireWriteLockAsync(previousLocalPath, action.PreviousRemotePath, ct);
-        await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, writeLock.Token, ct);
+        await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, ct);
         var record = action.Journal ?? CreateJournalRecordFromLegacyState(action, previousSyncItem);
         var previousJournalLocalPath = record.LocalPath;
         var previousJournalRemotePath = record.RemotePath;
@@ -407,10 +401,20 @@ public sealed class Propagator
 
     private async Task DeleteRemoteAsync(ReconcileAction action, CancellationToken ct)
     {
+        if (!string.Equals(
+                action.Journal?.LocalPendingOp,
+                SyncPendingOperations.RemoteDeleteConfirmation,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Blocked unconfirmed remote delete in propagator: LocalPath={LocalPath} RemotePath={RemotePath}",
+                action.LocalPath,
+                action.RemotePath);
+            return;
+        }
+
         var isDirectory = IsDirectoryAction(action);
-        await using var writeLock = await AcquireWriteLockAsync(action.LocalPath, action.RemotePath, ct);
-        await _webDav.DeleteAsync(action.RemotePath, writeLock.Token, ct);
-        await NotifyDeleteSucceededAsync(action.RemotePath, ct);
+        await _webDav.DeleteAsync(action.RemotePath, ct);
         DeleteTrackedState(action, isDirectory);
         _logger.LogInformation("Propagated remote delete: {RemotePath}", action.RemotePath);
     }
@@ -431,6 +435,7 @@ public sealed class Propagator
         var fileId = action.FileId ?? action.Journal?.FileId ?? action.Local?.FileId ?? SyncIdentity.NewLocalId();
         var localSize = action.Local?.LogicalSize ?? (File.Exists(action.LocalPath) ? new FileInfo(action.LocalPath).Length : 0);
         var localMTime = action.Local?.MTimeUtc ?? (File.Exists(action.LocalPath) ? File.GetLastWriteTimeUtc(action.LocalPath) : null);
+        var conflictCopy = await TryCreateConflictCopiesAsync(action, ct);
 
         _journal.UpsertConflict(new PendingConflictRecord
         {
@@ -438,17 +443,26 @@ public sealed class Propagator
             LocalPath = action.LocalPath,
             RemotePath = action.RemotePath,
             BaseETag = action.Journal?.BaseETag ?? action.Journal?.ETag,
+            LocalChecksum = conflictCopy.LocalChecksum,
             RemoteETag = action.Remote?.ETag,
             LocalMTimeUtc = localMTime,
             RemoteMTimeUtc = action.Remote?.LastModified,
             LocalSize = localSize,
             RemoteSize = action.Remote?.Size ?? 0,
+            RemoteTempPath = conflictCopy.RemotePath,
             Status = PendingConflictStatus.Pending
         });
 
-        await _vfs.SetInSyncAsync(action.LocalPath, false, ct);
-        _stateService?.UpdateStatus(action.LocalPath, SyncStatus.Conflict);
-        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Conflict, ct);
+        if (conflictCopy.Created && action.Remote != null)
+        {
+            await DownloadAsync(action with { Type = ReconcileActionType.DownloadChanged }, ct);
+        }
+        else
+        {
+            await _vfs.SetInSyncAsync(action.LocalPath, false, ct);
+            _stateService?.UpdateStatus(action.LocalPath, SyncStatus.Conflict);
+            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Conflict, ct);
+        }
 
         var fileName = Path.GetFileName(action.LocalPath);
         _problemService.Report(new SyncProblem
@@ -457,21 +471,93 @@ public sealed class Propagator
             ProblemType = SyncProblemType.Conflict,
             Severity = SyncProblemSeverity.Warning,
             Title = AppLocalizer.Instance.Format("Problem_Conflict_Title", fileName),
-            Summary = AppLocalizer.Instance.GetString("Problem_ImportedConflict_Summary"),
+            Summary = conflictCopy.LocalPath == null
+                ? AppLocalizer.Instance.GetString("Problem_ImportedConflict_Summary")
+                : AppLocalizer.Instance.Format("Problem_Conflict_Summary_WithCopy", Path.GetFileName(conflictCopy.LocalPath)),
             Details = JsonSerializer.Serialize(new
             {
                 action.RemotePath,
+                RemoteConflictPath = conflictCopy.RemotePath,
                 action.Type,
                 JournalETag = action.Journal?.ETag,
                 RemoteETag = action.Remote?.ETag
             }),
             LocalPath = action.LocalPath,
             RemotePath = action.RemotePath,
+            ConflictCopyPath = conflictCopy.LocalPath,
             FirstOccurredAt = DateTime.UtcNow,
             LastOccurredAt = DateTime.UtcNow
         });
 
         _logger.LogWarning("Conflict parked for {LocalPath}", action.LocalPath);
+    }
+
+    private async Task<ConflictCopyResult> TryCreateConflictCopiesAsync(ReconcileAction action, CancellationToken ct)
+    {
+        if (action.Remote == null ||
+            action.Remote.IsDirectory ||
+            Directory.Exists(action.LocalPath) ||
+            !File.Exists(action.LocalPath))
+        {
+            return ConflictCopyResult.None;
+        }
+
+        try
+        {
+            var localConflictPath = ConflictCopyNamer.CreateUniqueLocalPath(action.LocalPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(localConflictPath)!);
+            File.Copy(action.LocalPath, localConflictPath, overwrite: false);
+
+            var remoteConflictPath = await ConflictCopyNamer.CreateUniqueRemotePathAsync(
+                action.RemotePath,
+                async (candidate, token) => await _webDav.GetPropertiesAsync(candidate, token) != null,
+                ct);
+
+            var parentRemote = GetParentRemotePath(remoteConflictPath);
+            if (!string.IsNullOrWhiteSpace(parentRemote) && parentRemote != "/")
+                await _webDav.CreateDirectoryAsync(parentRemote, ct);
+
+            await using (var localCopyStream = OpenSharedReadStream(localConflictPath))
+            {
+                await _webDav.UploadFileAsync(remoteConflictPath, localCopyStream, ct);
+            }
+
+            var remoteCopy = await _webDav.GetPropertiesAsync(remoteConflictPath, ct);
+            var localCopyInfo = new FileInfo(localConflictPath);
+            var checksum = await FileHasher.ComputeSha256Async(localConflictPath, ct);
+            var copyFileId = SyncIdentity.NewLocalId();
+
+            UpsertJournal(
+                new ReconcileAction(
+                    ReconcileActionType.UploadNew,
+                    localConflictPath,
+                    remoteConflictPath,
+                    copyFileId,
+                    Local: null,
+                    Journal: null,
+                    Remote: remoteCopy),
+                remoteCopy,
+                isDirectory: false,
+                remoteCopy?.Size ?? localCopyInfo.Length,
+                checksum,
+                remoteCopy?.ETag,
+                remoteCopy?.LastModified == DateTime.MinValue
+                    ? localCopyInfo.LastWriteTimeUtc
+                    : remoteCopy?.LastModified.ToUniversalTime());
+
+            await SetExplorerStateAsync(localConflictPath, ExplorerItemState.Synced, ct);
+            _logger.LogInformation(
+                "Created conflict copies: LocalCopy={LocalCopyPath} RemoteCopy={RemoteCopyPath}",
+                localConflictPath,
+                remoteConflictPath);
+
+            return new ConflictCopyResult(true, localConflictPath, remoteConflictPath, checksum);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Failed to create conflict copies for {LocalPath}", action.LocalPath);
+            return ConflictCopyResult.None;
+        }
     }
 
     private void UpsertJournal(
@@ -527,24 +613,6 @@ public sealed class Propagator
     private Task SetExplorerStateAsync(string localPath, ExplorerItemState state, CancellationToken ct)
     {
         return _explorerItemStateService?.SetStateAsync(localPath, state, ct) ?? Task.CompletedTask;
-    }
-
-    private Task<WebDavWriteLock> AcquireWriteLockAsync(string localPath, string remotePath, CancellationToken ct)
-    {
-        return _lockCoordinator?.AcquireWriteLockAsync(localPath, remotePath, ct)
-            ?? Task.FromResult(WebDavWriteLock.None);
-    }
-
-    private Task NotifyUploadSucceededAsync(string localPath, string remotePath, CancellationToken ct)
-    {
-        return _lockCoordinator?.NotifyUploadSucceededAsync(localPath, remotePath, ct)
-            ?? Task.CompletedTask;
-    }
-
-    private Task NotifyDeleteSucceededAsync(string remotePath, CancellationToken ct)
-    {
-        return _lockCoordinator?.NotifyDeleteSucceededAsync(remotePath, ct)
-            ?? Task.CompletedTask;
     }
 
     private SyncJournalRecord CreateJournalRecordFromLegacyState(ReconcileAction action, SyncItem? syncItem)
@@ -691,4 +759,13 @@ public sealed class Propagator
     }
 
     private sealed record LocalFileSnapshot(long Length, DateTime LastWriteTimeUtc);
+
+    private sealed record ConflictCopyResult(
+        bool Created,
+        string? LocalPath,
+        string? RemotePath,
+        string? LocalChecksum)
+    {
+        public static ConflictCopyResult None { get; } = new(false, null, null, null);
+    }
 }

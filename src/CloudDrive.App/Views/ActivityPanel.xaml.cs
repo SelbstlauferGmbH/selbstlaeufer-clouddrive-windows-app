@@ -610,6 +610,28 @@ public partial class ActivityPanel : Window
                 }
                 break;
 
+            case ProblemActionKind.ConfirmRemoteDelete:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath) &&
+                    _dashboardContext.ConfirmRemoteDeleteAsync != null)
+                {
+                    await _dashboardContext.ConfirmRemoteDeleteAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                    await RefreshAsync();
+                }
+                break;
+
+            case ProblemActionKind.KeepRemoteCopy:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath) &&
+                    _dashboardContext.KeepRemoteCopyAsync != null)
+                {
+                    await _dashboardContext.KeepRemoteCopyAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                    await RefreshAsync();
+                }
+                break;
+
             case ProblemActionKind.Dismiss:
                 if (action.ProblemId.HasValue)
                 {

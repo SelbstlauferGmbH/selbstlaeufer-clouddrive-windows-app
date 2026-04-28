@@ -267,7 +267,7 @@ public class RemoteChangeDetector
         var record = _journal.GetByLocalPath(item.LocalPath) ?? _journal.GetByRemotePath(item.RemotePath);
         if (record != null)
         {
-            record.LocalPendingOp = "DeleteLocal";
+            record.LocalPendingOp = SyncPendingOperations.DeleteLocal;
             record.InSync = false;
             _journal.Upsert(record);
         }

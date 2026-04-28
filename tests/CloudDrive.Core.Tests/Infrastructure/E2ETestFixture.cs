@@ -21,8 +21,9 @@ public class E2ETestFixture : IAsyncLifetime
     public AppSettings Settings { get; private set; } = null!;
     public IWebDavService WebDav { get; private set; } = null!;
     public TestSessionLogger SessionLogger { get; private set; } = new();
+    public IReadOnlyList<RemoteSeedItem> RemoteSeedItems { get; private set; } = [];
+    public string RemoteSeedPrefix { get; private set; } = "";
     private JsonFileLogSink _fileLogSink = null!;
-    private string _seedRemotePath = "";
 
     /// <summary>Shortcut to the coordinator's internal DB (shared instance).</summary>
     public SyncStateDb Db => Coordinator.Db;
@@ -138,12 +139,45 @@ public class E2ETestFixture : IAsyncLifetime
 
     private async Task SeedRemoteRootAsync()
     {
-        _seedRemotePath = $"/e2e-test-seed-{Guid.NewGuid():N}.txt";
-        var content = Encoding.UTF8.GetBytes(
-            "CloudDrive E2E seed file. This keeps cfapi placeholder tests deterministic on a fresh WebDAV volume.\n");
+        RemoteSeedPrefix = $"e2e-test-seed-{Guid.NewGuid():N}";
+        var docsRoot = $"{RemoteSeedPrefix}-Docs";
+        var mediaRoot = $"{RemoteSeedPrefix}-Media";
+        var nestedReports = $"{docsRoot}/Reports";
 
-        await using var stream = new MemoryStream(content);
-        await WebDav.UploadFileAsync(_seedRemotePath, stream);
+        var seedItems = new List<RemoteSeedItem>
+        {
+            RemoteSeedItem.Directory($"/{docsRoot}", docsRoot),
+            RemoteSeedItem.Directory($"/{nestedReports}", nestedReports),
+            RemoteSeedItem.Directory($"/{mediaRoot}", mediaRoot),
+            RemoteSeedItem.File(
+                $"/{RemoteSeedPrefix}-root.txt",
+                $"{RemoteSeedPrefix}-root.txt",
+                "CloudDrive E2E root seed file created before the app starts.\n"),
+            RemoteSeedItem.File(
+                $"/{docsRoot}/welcome.txt",
+                $"{docsRoot}/welcome.txt",
+                "CloudDrive E2E nested seed file in the documents folder.\n"),
+            RemoteSeedItem.File(
+                $"/{nestedReports}/quarterly-summary.txt",
+                $"{nestedReports}/quarterly-summary.txt",
+                "CloudDrive E2E second-level seed file. Remote must remain the source of truth.\n"),
+            RemoteSeedItem.File(
+                $"/{mediaRoot}/metadata.txt",
+                $"{mediaRoot}/metadata.txt",
+                "CloudDrive E2E seed file in a sibling folder.\n")
+        };
+
+        foreach (var directory in seedItems.Where(item => item.IsDirectory))
+            await WebDav.CreateDirectoryAsync(directory.RemotePath);
+
+        foreach (var file in seedItems.Where(item => !item.IsDirectory))
+        {
+            var content = Encoding.UTF8.GetBytes(file.Content!);
+            await using var stream = new MemoryStream(content);
+            await WebDav.UploadFileAsync(file.RemotePath, stream);
+        }
+
+        RemoteSeedItems = seedItems;
     }
 
     /// <summary>Wait for SyncCoordinator to reach a specific state (event-driven).</summary>
@@ -173,4 +207,17 @@ public class E2ETestFixture : IAsyncLifetime
             cts.Dispose();
         }
     }
+}
+
+public sealed record RemoteSeedItem(
+    string RemotePath,
+    string RelativePath,
+    bool IsDirectory,
+    string? Content)
+{
+    public static RemoteSeedItem Directory(string remotePath, string relativePath) =>
+        new(remotePath, relativePath, IsDirectory: true, Content: null);
+
+    public static RemoteSeedItem File(string remotePath, string relativePath, string content) =>
+        new(remotePath, relativePath, IsDirectory: false, content);
 }
