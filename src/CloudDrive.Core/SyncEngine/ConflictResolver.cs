@@ -13,19 +13,22 @@ public class ConflictResolver
     private readonly ISyncProjectionService _projectionService;
     private readonly ISyncProblemService _problemService;
     private readonly ILogger<ConflictResolver> _logger;
+    private readonly SyncJournal? _journal;
 
     public ConflictResolver(
         IWebDavService webDav,
         ISyncItemStateService stateService,
         ISyncProjectionService projectionService,
         ISyncProblemService problemService,
-        ILogger<ConflictResolver> logger)
+        ILogger<ConflictResolver> logger,
+        SyncJournal? journal = null)
     {
         _webDav = webDav;
         _stateService = stateService;
         _projectionService = projectionService;
         _problemService = problemService;
         _logger = logger;
+        _journal = journal;
     }
 
     public async Task<bool> TryCaptureUploadConflictAsync(
@@ -34,6 +37,12 @@ public class ConflictResolver
         string remotePath,
         CancellationToken ct)
     {
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(localPath) ||
+            TransientFilePolicy.ShouldIgnoreRemotePath(remotePath))
+        {
+            return false;
+        }
+
         if (!File.Exists(localPath))
             return false;
 
@@ -89,6 +98,7 @@ public class ConflictResolver
         trackedItem.SyncStatus = SyncStatus.Synced;
         trackedItem.LastSynced = DateTime.UtcNow;
         _stateService.Upsert(trackedItem);
+        UpsertJournalConflict(existingItem, localPath, remotePath, remoteItem, restoredFileInfo.Length, trackedItem.LocalHash);
         _projectionService.ScheduleMarkInSync(localPath);
 
         var localizer = AppLocalizer.Instance;
@@ -116,12 +126,54 @@ public class ConflictResolver
         return true;
     }
 
+    private void UpsertJournalConflict(
+        SyncItem? existingItem,
+        string localPath,
+        string remotePath,
+        RemoteItem remoteItem,
+        long restoredSize,
+        string? checksum)
+    {
+        if (_journal == null)
+            return;
+
+        var existing = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var fileId = existing?.FileId ?? SyncIdentity.RemotePathFallbackId(remotePath);
+
+        _journal.Upsert(new SyncJournalRecord
+        {
+            FileId = fileId,
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = false,
+            Size = restoredSize,
+            ETag = remoteItem.ETag,
+            BaseETag = remoteItem.ETag,
+            Checksum = checksum,
+            MTimeUtc = remoteItem.LastModified == DateTime.MinValue ? DateTime.UtcNow : remoteItem.LastModified.ToUniversalTime(),
+            InSync = true
+        });
+
+        _journal.UpsertConflict(new PendingConflictRecord
+        {
+            FileId = fileId,
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            BaseETag = existingItem?.RemoteETag ?? existing?.ETag,
+            RemoteETag = remoteItem.ETag,
+            RemoteMTimeUtc = remoteItem.LastModified == DateTime.MinValue ? null : remoteItem.LastModified.ToUniversalTime(),
+            RemoteSize = remoteItem.Size,
+            LocalSize = restoredSize,
+            Status = PendingConflictStatus.Pending
+        });
+    }
+
     private static bool HasRemoteVersionChanged(SyncItem existingItem, RemoteItem remoteItem)
     {
         if (!string.IsNullOrWhiteSpace(existingItem.RemoteETag) &&
             !string.IsNullOrWhiteSpace(remoteItem.ETag))
         {
-            return !string.Equals(existingItem.RemoteETag, remoteItem.ETag, StringComparison.Ordinal);
+            return !WebDavETag.Equals(existingItem.RemoteETag, remoteItem.ETag);
         }
 
         if (existingItem.RemoteLastModified.HasValue &&

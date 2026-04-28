@@ -11,7 +11,6 @@ public sealed class WatchdogOfflineGraceSession
 {
     private static readonly TimeSpan GraceWindow = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
-    private static readonly NTStatus SuccessStatus = new(0);
 
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<WatchdogOfflineGraceSession> _logger;
@@ -51,8 +50,6 @@ public sealed class WatchdogOfflineGraceSession
 
         connector.FetchDataRequested += HandleFetchDataAsync;
         connector.FetchPlaceholdersRequested += HandleFetchPlaceholdersAsync;
-        connector.NotifyDeleteRequested += HandleNotifyDeleteAsync;
-        connector.NotifyRenameRequested += HandleNotifyRenameAsync;
 
         try
         {
@@ -116,15 +113,4 @@ public sealed class WatchdogOfflineGraceSession
         return Task.CompletedTask;
     }
 
-    private Task HandleNotifyDeleteAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters)
-    {
-        SyncRootConnector.AcknowledgeDelete(callbackInfo, SuccessStatus, _logger);
-        return Task.CompletedTask;
-    }
-
-    private Task HandleNotifyRenameAsync(CF_CALLBACK_INFO callbackInfo, CF_CALLBACK_PARAMETERS callbackParameters)
-    {
-        SyncRootConnector.AcknowledgeRename(callbackInfo, SuccessStatus, _logger);
-        return Task.CompletedTask;
-    }
 }

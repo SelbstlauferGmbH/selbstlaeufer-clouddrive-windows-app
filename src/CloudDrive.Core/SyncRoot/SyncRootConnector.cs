@@ -27,9 +27,8 @@ public class SyncRootConnector : IDisposable
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FetchPlaceholdersRequested;
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FetchDataRequested;
     public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? CancelFetchDataRequested;
-    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? NotifyDeleteRequested;
-    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? NotifyRenameRequested;
-    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? NotifyDehydrateRequested;
+    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FileOpenCompleted;
+    public event Func<CF_CALLBACK_INFO, CF_CALLBACK_PARAMETERS, Task>? FileCloseCompleted;
 
     public SyncRootConnector(ILogger<SyncRootConnector> logger, ActiveCloudRequestTracker? requestTracker = null)
     {
@@ -66,18 +65,13 @@ public class SyncRootConnector : IDisposable
             },
             new()
             {
-                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_DELETE,
-                Callback = OnNotifyDelete
+                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_FILE_OPEN_COMPLETION,
+                Callback = OnFileOpenCompletion
             },
             new()
             {
-                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_RENAME,
-                Callback = OnNotifyRename
-            },
-            new()
-            {
-                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_DEHYDRATE,
-                Callback = OnNotifyDehydrate
+                Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_FILE_CLOSE_COMPLETION,
+                Callback = OnFileCloseCompletion
             },
             CF_CALLBACK_REGISTRATION.CF_CALLBACK_REGISTRATION_END
         };
@@ -202,63 +196,40 @@ public class SyncRootConnector : IDisposable
         });
     }
 
-    // --- NOTIFY callbacks: async fire-and-forget ---
-    // The handlers are internally synchronous (CfExecute + return Task.CompletedTask)
-    // so they complete near-instantly on the thread pool thread.
-
-    private void OnNotifyDelete(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
+    private void OnFileOpenCompletion(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
     {
-        _logger.LogDebug("NOTIFY_DELETE callback: {Path}", callbackInfo.NormalizedPath);
+        _logger.LogDebug("NOTIFY_FILE_OPEN_COMPLETION callback: {Path}", callbackInfo.NormalizedPath);
         var info = callbackInfo;
         var parms = callbackParameters;
         _ = Task.Run(async () =>
         {
             try
             {
-                if (NotifyDeleteRequested != null)
-                    await NotifyDeleteRequested(info, parms);
+                if (FileOpenCompleted != null)
+                    await FileOpenCompleted(info, parms);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in NOTIFY_DELETE handler for {Path}", info.NormalizedPath);
+                _logger.LogDebug(ex, "Error in NOTIFY_FILE_OPEN_COMPLETION handler for {Path}", info.NormalizedPath);
             }
         });
     }
 
-    private void OnNotifyRename(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
+    private void OnFileCloseCompletion(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
     {
-        _logger.LogDebug("NOTIFY_RENAME callback: {Path}", callbackInfo.NormalizedPath);
+        _logger.LogDebug("NOTIFY_FILE_CLOSE_COMPLETION callback: {Path}", callbackInfo.NormalizedPath);
         var info = callbackInfo;
         var parms = callbackParameters;
         _ = Task.Run(async () =>
         {
             try
             {
-                if (NotifyRenameRequested != null)
-                    await NotifyRenameRequested(info, parms);
+                if (FileCloseCompleted != null)
+                    await FileCloseCompleted(info, parms);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in NOTIFY_RENAME handler for {Path}", info.NormalizedPath);
-            }
-        });
-    }
-
-    private void OnNotifyDehydrate(in CF_CALLBACK_INFO callbackInfo, in CF_CALLBACK_PARAMETERS callbackParameters)
-    {
-        _logger.LogInformation("NOTIFY_DEHYDRATE callback: {Path}", callbackInfo.NormalizedPath);
-        var info = callbackInfo;
-        var parms = callbackParameters;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                if (NotifyDehydrateRequested != null)
-                    await NotifyDehydrateRequested(info, parms);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in NOTIFY_DEHYDRATE handler for {Path}", info.NormalizedPath);
+                _logger.LogDebug(ex, "Error in NOTIFY_FILE_CLOSE_COMPLETION handler for {Path}", info.NormalizedPath);
             }
         });
     }

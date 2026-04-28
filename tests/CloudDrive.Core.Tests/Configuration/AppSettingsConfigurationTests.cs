@@ -63,4 +63,5 @@ public class AppSettingsConfigurationTests
         status.HasPassword.ShouldBeFalse();
         status.IsComplete.ShouldBeFalse();
     }
+
 }

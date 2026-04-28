@@ -5,6 +5,7 @@ using CloudDrive.Core.Data;
 using CloudDrive.Core.Infrastructure;
 using CloudDrive.Core.Localization;
 using CloudDrive.Core.SyncEngine;
+using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 
@@ -34,8 +35,12 @@ public class SettingsViewModelHealthTests
         using var viewModel = harness.CreateViewModel();
         await viewModel.RefreshAsync();
 
-        viewModel.HealthChecks.Count.ShouldBe(5);
+        viewModel.HealthChecks.Count.ShouldBe(6);
         viewModel.HealthChecks.Select(check => check.ActionId).ShouldNotContain("refresh-watchdog");
+
+        var lockCheck = viewModel.HealthChecks.Single(check => check.Name == AppLocalizer.Instance.GetString("HealthCheck_WebDavLock_Name"));
+        lockCheck.State.ShouldBe(DashboardHealthState.Healthy);
+        lockCheck.StatusText.ShouldBe(AppLocalizer.Instance.GetString("HealthCheck_WebDavLock_Status_Available"));
 
         var updaterCheck = viewModel.HealthChecks.Single(check => check.ActionId == "check-updates");
         updaterCheck.Name.ShouldBe(AppLocalizer.Instance.GetString("HealthCheck_Updater_Name"));
@@ -164,7 +169,8 @@ public class SettingsViewModelHealthTests
                     togglePauseResume: () => { },
                     ensureWatchdogScheduledTaskAsync: null,
                     checkForUpdatesNowAsync: checkForUpdatesNowAsync,
-                    startedAt: new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Local)),
+                    startedAt: new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Local),
+                    webDavLockSupportProvider: () => WebDavLockSupport.Supported("Test lock support")),
                 resetCallback: resetCallback,
                 resetConfigurationCallback: resetConfigurationCallback);
         }

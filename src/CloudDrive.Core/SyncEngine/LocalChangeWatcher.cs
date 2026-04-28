@@ -92,6 +92,12 @@ public class LocalChangeWatcher : IDisposable
         if (IsSuppressed(e.FullPath))
             return;
 
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(e.FullPath))
+        {
+            _logger.LogDebug("Ignoring transient local create: {Path}", e.FullPath);
+            return;
+        }
+
         // Skip placeholder entries being created by cfapi.
         if (CloudFilePlaceholderHelper.TryGetPlaceholderState(e.FullPath, out _))
             return;
@@ -103,6 +109,12 @@ public class LocalChangeWatcher : IDisposable
     {
         if (IsSuppressed(e.FullPath))
             return;
+
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(e.FullPath))
+        {
+            _logger.LogDebug("Ignoring transient local change: {Path}", e.FullPath);
+            return;
+        }
 
         if (CloudFilePlaceholderHelper.TryGetPlaceholderState(e.FullPath, out var placeholderState))
         {
@@ -150,6 +162,12 @@ public class LocalChangeWatcher : IDisposable
         if (IsSuppressed(e.FullPath))
             return;
 
+        if (TransientFilePolicy.ShouldIgnoreLocalPath(e.FullPath))
+        {
+            _logger.LogDebug("Ignoring transient local delete: {Path}", e.FullPath);
+            return;
+        }
+
         _channel.Writer.TryWrite(new FileChangeEvent(FileChangeType.Deleted, e.FullPath));
     }
 
@@ -157,6 +175,31 @@ public class LocalChangeWatcher : IDisposable
     {
         if (IsSuppressed(e.FullPath) || (!string.IsNullOrEmpty(e.OldFullPath) && IsSuppressed(e.OldFullPath)))
             return;
+
+        var oldIsTransient = !string.IsNullOrEmpty(e.OldFullPath) &&
+                             TransientFilePolicy.ShouldIgnoreLocalPath(e.OldFullPath);
+        var newIsTransient = TransientFilePolicy.ShouldIgnoreLocalPath(e.FullPath);
+        var oldIsProviderInternal = !string.IsNullOrEmpty(e.OldFullPath) &&
+                                    TransientFilePolicy.IsProviderInternalLocalPath(e.OldFullPath);
+
+        if (newIsTransient)
+        {
+            _logger.LogDebug("Ignoring transient local rename target: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+            return;
+        }
+
+        if (oldIsProviderInternal)
+        {
+            _logger.LogDebug("Ignoring provider-owned local rename: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+            return;
+        }
+
+        if (oldIsTransient)
+        {
+            _logger.LogDebug("Transient local file became durable: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+            EnqueueDebounced(new FileChangeEvent(FileChangeType.Changed, e.FullPath));
+            return;
+        }
 
         _logger.LogDebug("Local watcher rename queued: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
         _channel.Writer.TryWrite(new FileChangeEvent(FileChangeType.Renamed, e.FullPath, e.OldFullPath));

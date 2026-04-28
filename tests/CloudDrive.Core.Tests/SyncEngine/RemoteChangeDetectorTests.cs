@@ -232,6 +232,65 @@ public class RemoteChangeDetectorTests
         webDav.VerifyAll();
     }
 
+    [Fact]
+    public async Task ScanAsync_WhenStoredETagIsQuoted_DoesNotTreatSameRemoteVersionAsChanged()
+    {
+        using var tempDir = new TempDirectory();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "sync-state.db"));
+
+        var stateService = new SyncItemStateService(db);
+        var pathMapper = new PathMapper(tempDir.Path, "/");
+        var webDav = new Mock<IWebDavService>(MockBehavior.Strict);
+        var projectionService = new Mock<ISyncProjectionService>(MockBehavior.Strict);
+
+        var localPath = Path.Combine(tempDir.Path, "upload.txt");
+        db.Upsert(new SyncItem
+        {
+            LocalPath = localPath,
+            RemotePath = "/upload.txt",
+            IsDirectory = false,
+            FileSize = 8,
+            RemoteETag = "\"etag-after-upload\"",
+            SyncStatus = SyncStatus.Synced
+        });
+
+        webDav
+            .Setup(x => x.ListDirectoryAsync("/", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new RemoteItem
+                {
+                    Name = "upload.txt",
+                    RemotePath = "/upload.txt",
+                    IsDirectory = false,
+                    Size = 8,
+                    LastModified = new DateTime(2026, 4, 24, 4, 12, 0, DateTimeKind.Utc),
+                    ETag = "etag-after-upload"
+                }
+            ]);
+
+        var detector = new RemoteChangeDetector(
+            webDav.Object,
+            stateService,
+            pathMapper,
+            projectionService.Object,
+            NullLogger<RemoteChangeDetector>.Instance);
+
+        await detector.ScanAsync(CancellationToken.None);
+
+        var item = db.GetByLocalPath(localPath);
+        item.ShouldNotBeNull();
+        item.SyncStatus.ShouldBe(SyncStatus.Synced);
+
+        projectionService.Verify(
+            x => x.UpdatePlaceholderMetadata(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<DateTime>(), It.IsAny<string?>()),
+            Times.Never);
+        projectionService.Verify(
+            x => x.RefreshDirectory(It.IsAny<string>()),
+            Times.Never);
+        projectionService.VerifyNoOtherCalls();
+        webDav.VerifyAll();
+    }
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()

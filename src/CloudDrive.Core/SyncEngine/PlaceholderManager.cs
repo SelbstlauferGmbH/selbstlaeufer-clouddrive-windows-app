@@ -79,7 +79,9 @@ public class PlaceholderManager
             _logger.LogDebug("PlaceholderManager[Fetch] ActivityId={ActivityId} RemotePath={RemotePath}", 
                 activityId, remotePath);
 
-            var items = await _webDav.ListDirectoryAsync(remotePath);
+            var items = (await _webDav.ListDirectoryAsync(remotePath))
+                .Where(item => !TransientFilePolicy.ShouldIgnoreRemotePath(item.RemotePath, item.IsDirectory))
+                .ToList();
             _logger.LogInformation("PlaceholderManager[Fetch] ActivityId={ActivityId} ItemsFetched={Count}", 
                 activityId, items.Count);
 
@@ -250,7 +252,7 @@ public class PlaceholderManager
 
     public void CreatePlaceholdersInDirectory(string localDirectoryPath, IReadOnlyList<RemoteItem> items)
     {
-        foreach (var item in items)
+        foreach (var item in items.Where(item => !TransientFilePolicy.ShouldIgnoreRemotePath(item.RemotePath, item.IsDirectory)))
         {
             var fileIdentity = Encoding.UTF8.GetBytes(item.RemotePath);
             var handle = GCHandle.Alloc(fileIdentity, GCHandleType.Pinned);

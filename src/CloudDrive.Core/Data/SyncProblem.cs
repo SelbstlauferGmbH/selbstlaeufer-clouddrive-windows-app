@@ -27,7 +27,10 @@ public enum SyncProblemType
     RemoteSync = 3,
     Upload = 4,
     Download = 5,
-    LocalAccess = 6
+    LocalAccess = 6,
+    DiskFull = 7,
+    PermissionDenied = 8,
+    RemoteLock = 9
 }
 
 public enum SyncProblemSeverity

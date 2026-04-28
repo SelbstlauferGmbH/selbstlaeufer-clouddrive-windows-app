@@ -3,6 +3,7 @@ using CloudDrive.Core.Data;
 using CloudDrive.Core.SyncEngine;
 using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging;
+using System.Text;
 
 namespace CloudDrive.Core.Tests.Infrastructure;
 
@@ -19,6 +20,9 @@ public class E2ETestFixture : IAsyncLifetime
     public SyncCoordinator Coordinator { get; private set; } = null!;
     public AppSettings Settings { get; private set; } = null!;
     public IWebDavService WebDav { get; private set; } = null!;
+    public TestSessionLogger SessionLogger { get; private set; } = new();
+    private JsonFileLogSink _fileLogSink = null!;
+    private string _seedRemotePath = "";
 
     /// <summary>Shortcut to the coordinator's internal DB (shared instance).</summary>
     public SyncStateDb Db => Coordinator.Db;
@@ -43,6 +47,7 @@ public class E2ETestFixture : IAsyncLifetime
     {
         // 0. Load .env file (repository root) into environment variables
         DotEnvLoader.Load();
+        SessionLogger = new TestSessionLogger();
 
         // 1. Create isolated temp directory
         TestDataDir = Path.Combine(Path.GetTempPath(), $"clouddrive-e2e-{Guid.NewGuid():N}");
@@ -63,11 +68,15 @@ public class E2ETestFixture : IAsyncLifetime
             DataDirectory = TestDataDir // ensures SyncCoordinator creates DB here
         };
 
-        // 3. Create coordinator with in-memory log sink
+        // 3. Create coordinator with in-memory log sink + real-time JSON file sink
         LogSink = new InMemoryLogSink();
+        // Stream log path mirrors the session log path so stop-local.ps1 finds it
+        var streamLogPath = SessionLogger.OutputPath.Replace(".jsonl", "-stream.jsonl");
+        _fileLogSink = new JsonFileLogSink(streamLogPath);
         var loggerFactory = LoggerFactory.Create(b =>
         {
             b.AddProvider(LogSink);
+            b.AddProvider(_fileLogSink);
             b.SetMinimumLevel(LogLevel.Debug);
         });
 
@@ -75,6 +84,8 @@ public class E2ETestFixture : IAsyncLifetime
         var handler = WebDavAuthHandler.CreateHandler(Settings, Password);
         var httpClient = new HttpClient(handler);
         WebDav = new WebDavService(httpClient, Settings.WebDavUrl, loggerFactory.CreateLogger<WebDavService>());
+
+        await SeedRemoteRootAsync();
 
         Coordinator = new SyncCoordinator(Settings, WebDav, loggerFactory);
 
@@ -118,7 +129,21 @@ public class E2ETestFixture : IAsyncLifetime
         // 4. Clean up local temp directory
         try { Directory.Delete(TestDataDir, recursive: true); } catch { /* best effort */ }
 
+        // 5. Write final session log and close streaming sink
+        try { SessionLogger.Flush(LogSink); } catch { /* best effort */ }
+        try { _fileLogSink.Dispose(); } catch { /* best effort */ }
+
         LogSink.Dispose();
+    }
+
+    private async Task SeedRemoteRootAsync()
+    {
+        _seedRemotePath = $"/e2e-test-seed-{Guid.NewGuid():N}.txt";
+        var content = Encoding.UTF8.GetBytes(
+            "CloudDrive E2E seed file. This keeps cfapi placeholder tests deterministic on a fresh WebDAV volume.\n");
+
+        await using var stream = new MemoryStream(content);
+        await WebDav.UploadFileAsync(_seedRemotePath, stream);
     }
 
     /// <summary>Wait for SyncCoordinator to reach a specific state (event-driven).</summary>

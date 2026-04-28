@@ -176,6 +176,28 @@ public class SyncProjectionService : ISyncProjectionService
                             attempt,
                             InSyncRetryCount,
                             localPath);
+
+                        var trackedItem = _stateService.GetByLocalPath(localPath);
+                        if (trackedItem != null &&
+                            !string.IsNullOrWhiteSpace(trackedItem.RemotePath) &&
+                            SuppressAndConvertToPlaceholder(localPath, trackedItem.RemotePath))
+                        {
+                            _explorerWindowRefresher.NotifyItemChanged(localPath);
+
+                            if (!string.IsNullOrEmpty(parentDirectoryPath))
+                            {
+                                SuppressLocalWatcher(parentDirectoryPath);
+                                _explorerWindowRefresher.NotifyDirectoryChanged(parentDirectoryPath);
+                                _explorerWindowRefresher.RefreshDirectory(parentDirectoryPath);
+                            }
+
+                            _logger.LogInformation(
+                                "In-sync projection converted local file to placeholder for {Path} Attempt={Attempt} TotalDurationMs={DurationMs}",
+                                localPath,
+                                attempt,
+                                stopwatch.ElapsedMilliseconds);
+                            return;
+                        }
                     }
 
                     SuppressLocalWatcher(localPath);
@@ -212,5 +234,11 @@ public class SyncProjectionService : ISyncProjectionService
         {
             _pendingInSyncOperations.TryRemove(localPath, out _);
         }
+    }
+
+    private bool SuppressAndConvertToPlaceholder(string localPath, string? remotePath)
+    {
+        SuppressLocalWatcher(localPath);
+        return _cloudFileOperations.TryConvertToPlaceholder(localPath, remotePath, _logger);
     }
 }

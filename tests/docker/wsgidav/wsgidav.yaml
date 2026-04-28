@@ -1,0 +1,29 @@
+# WsgiDAV configuration for CloudDrive E2E tests
+# Credentials: testuser / testpass  (set via entrypoint.py, not hardcoded here)
+# Mount point: / -> /data/dav
+
+host: "0.0.0.0"
+port: 8080
+
+provider_mapping:
+  "/": "/data/dav"
+
+# Keep the default Class 2 WebDAV behavior explicit for lock-detection tests.
+lock_storage: true
+
+http_authenticator:
+  domain_controller: wsgidav.dc.simple_dc.SimpleDomainController
+  accept_basic: true
+  accept_digest: false
+  default_to_digest: false
+
+simple_dc:
+  user_mapping:
+    "*":
+      testuser:
+        password: "testpass"
+
+# WsgiDAV's own verbose output is suppressed; we use JSON logging instead.
+verbose: 0
+logging:
+  enable_loggers: []

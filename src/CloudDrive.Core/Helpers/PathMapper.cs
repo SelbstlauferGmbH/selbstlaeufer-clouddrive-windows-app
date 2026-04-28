@@ -18,8 +18,17 @@ public class PathMapper
     public string ToRemotePath(string localPath)
     {
         var relativePath = Path.GetRelativePath(_syncRootPath, localPath);
+        if (relativePath == ".")
+        {
+            var rootResult = string.IsNullOrEmpty(_remoteBasePath) ? "/" : _remoteBasePath;
+            _logger?.LogDebug("PathMapper: ToRemotePath({LocalPath}) -> {RemotePath}", localPath, rootResult);
+            return rootResult;
+        }
+
         var remotePart = relativePath.Replace('\\', '/');
-        var result = $"{_remoteBasePath}/{remotePart}";
+        var result = string.IsNullOrEmpty(_remoteBasePath)
+            ? $"/{remotePart}"
+            : $"{_remoteBasePath}/{remotePart}";
         _logger?.LogDebug("PathMapper: ToRemotePath({LocalPath}) -> {RemotePath}", localPath, result);
         return result;
     }

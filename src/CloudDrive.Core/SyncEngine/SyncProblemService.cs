@@ -14,6 +14,9 @@ public class SyncProblemService : ISyncProblemService
         _logger = logger;
     }
 
+    public event Action<SyncProblem>? ProblemReported;
+    public event Action<string>? ProblemResolved;
+
     public SyncProblem Report(SyncProblem problem)
     {
         var saved = _db.UpsertProblem(problem);
@@ -24,12 +27,14 @@ public class SyncProblemService : ISyncProblemService
             saved.LocalPath,
             saved.RemotePath,
             saved.DedupeKey ?? "<none>");
+        ProblemReported?.Invoke(saved);
         return saved;
     }
 
     public void Resolve(long problemId)
     {
         _db.ResolveProblem(problemId);
+        ProblemResolved?.Invoke(problemId.ToString());
     }
 
     public void ResolveByDedupeKey(string dedupeKey)
@@ -38,5 +43,6 @@ public class SyncProblemService : ISyncProblemService
             return;
 
         _db.ResolveProblemsByDedupeKey(dedupeKey);
+        ProblemResolved?.Invoke(dedupeKey);
     }
 }

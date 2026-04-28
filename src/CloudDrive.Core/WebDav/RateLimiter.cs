@@ -32,6 +32,7 @@ public class RateLimiter
             ct.ThrowIfCancellationRequested();
 
             await _gate.WaitAsync(ct);
+            var releaseGate = true;
             try
             {
                 PurgeExpired();
@@ -39,6 +40,8 @@ public class RateLimiter
                 if (_timestamps.Count < _maxRequests)
                 {
                     _timestamps.Enqueue(DateTime.UtcNow);
+                    releaseGate = false;
+                    _gate.Release();
                     return;
                 }
 
@@ -50,6 +53,7 @@ public class RateLimiter
                     {
                         _logger.LogDebug("RateLimiter: throttling for {WaitMs}ms ({Count}/{Max} requests in window)",
                             (int)waitTime.TotalMilliseconds, _timestamps.Count, _maxRequests);
+                        releaseGate = false;
                         _gate.Release();
                         await Task.Delay(waitTime, ct);
                         continue; // Re-acquire and retry
@@ -59,11 +63,13 @@ public class RateLimiter
                 // Oldest has expired, purge and allow
                 PurgeExpired();
                 _timestamps.Enqueue(DateTime.UtcNow);
+                releaseGate = false;
+                _gate.Release();
                 return;
             }
             finally
             {
-                if (_gate.CurrentCount == 0)
+                if (releaseGate)
                     _gate.Release();
             }
         }

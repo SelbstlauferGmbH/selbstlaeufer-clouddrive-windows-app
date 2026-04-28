@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CloudDrive.Core.SyncEngine;
 
-internal sealed class ExplorerWindowMonitor
+internal sealed class ExplorerWindowMonitor : IFocusedFolderProvider
 {
     private readonly string _syncRootPath;
     private readonly ILogger<ExplorerWindowMonitor> _logger;
@@ -77,6 +77,75 @@ internal sealed class ExplorerWindowMonitor
         }
     }
 
+    public string? GetCurrentFocusedPath()
+    {
+        var foregroundWindow = GetForegroundWindow();
+        if (foregroundWindow == IntPtr.Zero)
+            return null;
+
+        object? shellApplication = null;
+        object? shellWindows = null;
+
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("Shell.Application");
+            if (shellType == null)
+                return null;
+
+            shellApplication = Activator.CreateInstance(shellType);
+            if (shellApplication == null)
+                return null;
+
+            shellWindows = InvokeMember(shellApplication, "Windows", BindingFlags.InvokeMethod);
+            if (shellWindows == null)
+                return null;
+
+            var count = Convert.ToInt32(
+                InvokeMember(shellWindows, "Count", BindingFlags.GetProperty) ?? 0,
+                CultureInfo.InvariantCulture);
+
+            for (int i = 0; i < count; i++)
+            {
+                object? window = null;
+
+                try
+                {
+                    window = InvokeMember(shellWindows, "Item", BindingFlags.InvokeMethod, [i]);
+                    if (window == null)
+                        continue;
+
+                    var hwndValue = InvokeMember(window, "HWND", BindingFlags.GetProperty);
+                    if (hwndValue == null || new IntPtr(Convert.ToInt64(hwndValue, CultureInfo.InvariantCulture)) != foregroundWindow)
+                        continue;
+
+                    var locationUrl = InvokeMember(window, "LocationURL", BindingFlags.GetProperty) as string;
+                    if (TryGetLocalPath(locationUrl, out var localPath) && IsInSyncRoot(localPath))
+                        return NormalizePath(localPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to inspect focused Explorer window {Index}", i);
+                }
+                finally
+                {
+                    ReleaseComObject(window);
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to inspect focused Explorer window");
+            return null;
+        }
+        finally
+        {
+            ReleaseComObject(shellWindows);
+            ReleaseComObject(shellApplication);
+        }
+    }
+
     private bool IsInSyncRoot(string localPath)
     {
         var normalized = NormalizePath(localPath);
@@ -124,4 +193,7 @@ internal sealed class ExplorerWindowMonitor
         if (comObject != null && Marshal.IsComObject(comObject))
             Marshal.ReleaseComObject(comObject);
     }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 }

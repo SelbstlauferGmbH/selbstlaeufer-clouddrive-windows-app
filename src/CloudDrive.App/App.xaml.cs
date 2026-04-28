@@ -29,6 +29,8 @@ public partial class App : System.Windows.Application
     private ActivityPanel? _activityPanel;
     private SettingsWindow? _settingsWindow;
     private SyncStateDb? _fallbackDashboardDb;
+    private readonly AppLaunchOptions _launchOptions;
+    private ShellCommandServer? _shellCommandServer;
     private bool _folderOpenedOnce;
     private bool _serverWaitNotificationShown;
     private bool _disconnectionNotificationShown;
@@ -39,7 +41,8 @@ public partial class App : System.Windows.Application
 
     public App(AppLaunchOptions? launchOptions = null)
     {
-        _folderOpenedOnce = (launchOptions ?? AppLaunchOptions.Default).IsAutoStartLaunch;
+        _launchOptions = launchOptions ?? AppLaunchOptions.Default;
+        _folderOpenedOnce = _launchOptions.IsAutoStartLaunch;
     }
 
     protected override async void OnStartup(System.Windows.StartupEventArgs e)
@@ -105,6 +108,13 @@ public partial class App : System.Windows.Application
         _instanceGuard = new SingleInstanceGuard("CloudDrive");
         if (!_instanceGuard.TryAcquire())
         {
+            if (_launchOptions.ShellCommand != null &&
+                await ShellCommandClient.TrySendAsync(_launchOptions.ShellCommand, TimeSpan.FromSeconds(2)))
+            {
+                Shutdown();
+                return;
+            }
+
             System.Windows.MessageBox.Show(localizer.GetString("App_AlreadyRunning_Message"), localizer.GetString("App_Name"),
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             Shutdown();
@@ -124,6 +134,20 @@ public partial class App : System.Windows.Application
                 fileSizeLimitBytes: 10 * 1024 * 1024);
         }
 
+        // When CLOUDDRIVE_DEBUG_JSONLOG=1, also write a JSON Lines file that
+        // stop-local.ps1 (or run-e2e-local.ps1) can merge with WebDAV server logs.
+        if (Environment.GetEnvironmentVariable("CLOUDDRIVE_DEBUG_JSONLOG") == "1")
+        {
+            var jsonLogDir = Path.Combine(AppSettings.GetDataDirectory(), "logs");
+            Directory.CreateDirectory(jsonLogDir);
+            logConfig = logConfig.WriteTo.File(
+                new Serilog.Formatting.Json.JsonFormatter(),
+                Path.Combine(jsonLogDir, "debug-.jsonl"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 3,
+                fileSizeLimitBytes: 50 * 1024 * 1024);
+        }
+
         Log.Logger = logConfig.CreateLogger();
 
         if (settings.EnableFileLogging)
@@ -136,6 +160,7 @@ public partial class App : System.Windows.Application
         }
 
         settings = AppSettings.Load();
+        RegisterExplorerIntegration(settings);
         localizer.Initialize(settings.Language);
         ThemeManager.ApplyTheme(settings.ThemeMode);
 
@@ -250,6 +275,11 @@ public partial class App : System.Windows.Application
 
         // Start host
         await _host.StartAsync();
+
+        StartShellCommandServer();
+
+        if (_launchOptions.ShellCommand != null)
+            await HandleShellCommandAsync(_launchOptions.ShellCommand);
     }
 
     private bool EnsureStartupConfiguration()
@@ -276,6 +306,8 @@ public partial class App : System.Windows.Application
             (_activityTracker as IDisposable)?.Dispose();
 
         _trayIcon?.Dispose();
+        _shellCommandServer?.Dispose();
+        _shellCommandServer = null;
 
         if (_host != null)
         {
@@ -302,6 +334,79 @@ public partial class App : System.Windows.Application
         return _host?.Services.GetServices<IHostedService>()
             .OfType<SyncEngineHostedService>()
             .FirstOrDefault();
+    }
+
+    private void RegisterExplorerIntegration(AppSettings settings)
+    {
+        try
+        {
+            var executablePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(executablePath))
+                return;
+
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddSerilog(Log.Logger, dispose: false));
+            var registrar = new ExplorerContextMenuRegistrar(loggerFactory.CreateLogger<ExplorerContextMenuRegistrar>());
+            registrar.EnsureRegistered(executablePath, settings.SyncRootPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Explorer context menu registration failed");
+        }
+    }
+
+    private void StartShellCommandServer()
+    {
+        if (_shellCommandServer != null)
+            return;
+
+        var loggerFactory = _host!.Services.GetRequiredService<ILoggerFactory>();
+        _shellCommandServer = new ShellCommandServer(loggerFactory.CreateLogger<ShellCommandServer>());
+        _shellCommandServer.CommandReceived += command =>
+            Dispatcher.InvokeAsync(() => HandleShellCommandAsync(command)).Task.Unwrap();
+        _shellCommandServer.Start();
+    }
+
+    private async Task HandleShellCommandAsync(ShellCommand command)
+    {
+        Log.Information("Shell command received: {Command} Path={Path}", command.Command, command.Path);
+        switch (command.Command.ToLowerInvariant())
+        {
+            case "retry":
+                await TriggerManualSyncAsync();
+                await ShowProblemsAsync();
+                break;
+            case "resolve-conflict":
+            case "open-problems":
+                await ShowProblemsAsync();
+                break;
+            case "dismiss-error":
+                DismissProblemsForPath(command.Path);
+                await ShowProblemsAsync();
+                break;
+        }
+    }
+
+    private async Task ShowProblemsAsync()
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            _activityPanel?.HideFlyout();
+            OpenSettingsWindow(SettingsSection.Problems);
+        });
+    }
+
+    private void DismissProblemsForPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var db = GetSyncService()?.Coordinator?.Db;
+        if (db == null)
+            return;
+
+        db.ResolveProblemsByDedupeKey(SyncProblemKeys.Conflict(path));
+        db.ResolveProblemsByDedupeKey(SyncProblemKeys.Upload(path));
+        db.ResolveProblemsByDedupeKey(SyncProblemKeys.Download(path));
     }
 
     private AppDashboardContext CreateDashboardContext()
@@ -336,7 +441,15 @@ public partial class App : System.Windows.Application
             TogglePauseResume,
             EnsureWatchdogScheduledTaskAsync,
             () => updateService.CheckForUpdatesNowAsync(),
-            _appStartedAt);
+            _appStartedAt,
+            () => GetSyncService()?.WebDavLockSupport ?? WebDavLockSupport.NotChecked(),
+            async () =>
+            {
+                var service = GetSyncService();
+                return service == null
+                    ? WebDavLockSupport.NotChecked()
+                    : await service.RefreshWebDavLockSupportAsync();
+            });
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()

@@ -471,6 +471,18 @@ Do you want to restart CloudDrive now?</value>
   <data name="Activity_CloudDriveReady" xml:space="preserve">
     <value>CloudDrive is ready</value>
   </data>
+  <data name="Activity_WebDavLockingAvailable" xml:space="preserve">
+    <value>WebDAV server locking is available</value>
+  </data>
+  <data name="Activity_WebDavLockingUnavailable" xml:space="preserve">
+    <value>WebDAV server locking is unavailable</value>
+  </data>
+  <data name="Activity_WebDavLockingProbeFailed" xml:space="preserve">
+    <value>WebDAV server locking probe failed</value>
+  </data>
+  <data name="Activity_WebDavLockingNotChecked" xml:space="preserve">
+    <value>WebDAV server locking has not been checked</value>
+  </data>
   <data name="Activity_Deleting" xml:space="preserve">
     <value>Deleting {0}</value>
   </data>
@@ -813,6 +825,30 @@ Do you want to restart CloudDrive now?</value>
   <data name="HealthCheck_WebDav_Name" xml:space="preserve">
     <value>WebDAV connection</value>
   </data>
+  <data name="HealthCheck_WebDavLock_Name" xml:space="preserve">
+    <value>WebDAV server locking</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Available" xml:space="preserve">
+    <value>Available</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_Unavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Status_ProbeFailed" xml:space="preserve">
+    <value>Probe failed</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Available" xml:space="preserve">
+    <value>The server accepted a WebDAV LOCK and a token-protected probe write, so CloudDrive will use server locks for Office files.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_Unavailable" xml:space="preserve">
+    <value>The server did not prove WebDAV lock support. CloudDrive will sync normally without server-side edit locks.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_ProbeFailed" xml:space="preserve">
+    <value>CloudDrive could not complete the WebDAV lock probe. Server-side edit locks are disabled for this session.</value>
+  </data>
+  <data name="HealthCheck_WebDavLock_Detail_NotChecked" xml:space="preserve">
+    <value>WebDAV lock support has not been checked yet.</value>
+  </data>
   <data name="HealthCheck_Updater_Name" xml:space="preserve">
     <value>Updater</value>
   </data>
@@ -1065,6 +1101,15 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_Upload_SummarySuffix" xml:space="preserve">
     <value>{0} Please review the details and try again.</value>
   </data>
+  <data name="Problem_RemoteLock_Title" xml:space="preserve">
+    <value>{0} is locked on the server</value>
+  </data>
+  <data name="Problem_RemoteLock_Summary" xml:space="preserve">
+    <value>Another WebDAV client appears to be editing this file. CloudDrive will retry.</value>
+  </data>
+  <data name="Problem_RemoteLock_Detail" xml:space="preserve">
+    <value>The WebDAV server refused access because {0} is locked.</value>
+  </data>
   <data name="Problem_Kind_Conflict" xml:space="preserve">
     <value>Conflict</value>
   </data>
@@ -1079,6 +1124,9 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Problem_Kind_DownloadError" xml:space="preserve">
     <value>Download error</value>
+  </data>
+  <data name="Problem_Kind_RemoteLock" xml:space="preserve">
+    <value>Server lock</value>
   </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>
