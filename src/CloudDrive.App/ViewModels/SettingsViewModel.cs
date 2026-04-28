@@ -379,6 +379,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
                 await RefreshAsync();
                 break;
+            case "install-update":
+                _dashboardContext.ApplyUpdateAndRestart();
+                break;
             case "open-folder":
                 _dashboardContext.OpenFolder();
                 break;

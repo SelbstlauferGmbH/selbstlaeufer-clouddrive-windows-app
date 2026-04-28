@@ -156,6 +156,9 @@ Do you want to restart CloudDrive now?</value>
   <data name="Common_CheckNow" xml:space="preserve">
     <value>Check now</value>
   </data>
+  <data name="Common_UpdateAndRestartNow" xml:space="preserve">
+    <value>Update and restart now</value>
+  </data>
   <data name="Common_Dismiss" xml:space="preserve">
     <value>Dismiss</value>
   </data>
@@ -1284,7 +1287,7 @@ Select Cancel to stop here and keep the existing files.</value>
     <value>Quit Selbstläufer CloudDrive</value>
   </data>
   <data name="Tray_Menu_UpdateAvailable" xml:space="preserve">
-    <value>Install update now</value>
+    <value>Update and restart now</value>
   </data>
   <data name="Tray_Balloon_Startup_ServerUnreachable" xml:space="preserve">
     <value>CloudDrive started, but {0} could not be reached.</value>

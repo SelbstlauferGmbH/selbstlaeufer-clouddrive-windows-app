@@ -449,7 +449,8 @@ public partial class App : System.Windows.Application
                 return service == null
                     ? WebDavLockSupport.NotChecked()
                     : await service.RefreshWebDavLockSupportAsync();
-            });
+            },
+            updateService.ApplyUpdateAndRestart);
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()
@@ -642,9 +643,31 @@ public partial class App : System.Windows.Application
         _trayIcon?.ShowBalloon(
             AppLocalizer.Instance.GetString("App_Name"),
             AppLocalizer.Instance.GetString("Tray_Balloon_UpdateReady"),
-            System.Windows.Forms.ToolTipIcon.Info);
+            System.Windows.Forms.ToolTipIcon.Info,
+            () => _ = Dispatcher.InvokeAsync(async () => await OpenUpdateHealthCheckAsync(updateService)));
 
         _trayIcon?.ShowUpdateAvailable(() => updateService.ApplyUpdateAndRestart());
+    }
+
+    private async Task OpenUpdateHealthCheckAsync(UpdateService updateService)
+    {
+        try
+        {
+            Log.Information("Update notification clicked; opening health check and checking for updates.");
+            OpenSettingsWindow(SettingsSection.HealthCheck);
+
+            if (_settingsWindow?.DataContext is SettingsViewModel viewModel)
+            {
+                await viewModel.ExecuteHealthActionAsync("check-updates");
+                return;
+            }
+
+            await updateService.CheckForUpdatesNowAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Update notification action failed.");
+        }
     }
 
     private const uint SEM_FAILCRITICALERRORS = 0x0001;
