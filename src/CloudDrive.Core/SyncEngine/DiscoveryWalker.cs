@@ -232,7 +232,7 @@ public sealed class DiscoveryWalker
                candidatePath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ReconcileAction ClassifyExistingLocal(
+    private ReconcileAction ClassifyExistingLocal(
         string localPath,
         string remotePath,
         string? fileId,
@@ -242,9 +242,14 @@ public sealed class DiscoveryWalker
     {
         if (journal == null)
         {
-            return remote == null
-                ? new ReconcileAction(ReconcileActionType.UploadNew, localPath, remotePath, fileId, local, null, null)
-                : new ReconcileAction(ReconcileActionType.Conflict, localPath, remotePath, fileId, local, null, remote);
+            if (remote == null)
+                return new ReconcileAction(ReconcileActionType.UploadNew, localPath, remotePath, fileId, local, null, null);
+
+            if (local == null)
+                return new ReconcileAction(ReconcileActionType.Conflict, localPath, remotePath, fileId, null, null, remote);
+
+            var baseline = CreateBaselineFromPlaceholder(localPath, remotePath, local, remote);
+            return ClassifyMissingJournalBaseline(localPath, remotePath, local, baseline, remote);
         }
 
         if (remote == null)
@@ -264,5 +269,114 @@ public sealed class DiscoveryWalker
             return new ReconcileAction(ReconcileActionType.DownloadChanged, localPath, remotePath, fileId, local, journal, remote);
 
         return ReconcileAction.NoOp(localPath, remotePath, fileId, local, journal, remote);
+    }
+
+    private ReconcileAction ClassifyMissingJournalBaseline(
+        string localPath,
+        string remotePath,
+        PlaceholderInfo local,
+        SyncJournalRecord baseline,
+        RemoteItem remote)
+    {
+        if (local.IsDirectory != remote.IsDirectory)
+        {
+            return new ReconcileAction(
+                ReconcileActionType.Conflict,
+                localPath,
+                remotePath,
+                baseline.FileId,
+                local,
+                baseline,
+                remote);
+        }
+
+        if (local.IsDirectory)
+        {
+            SeedJournalBaseline(baseline, localChanged: false);
+            return ReconcileAction.NoOp(localPath, remotePath, baseline.FileId, local, baseline, remote);
+        }
+
+        if (string.IsNullOrWhiteSpace(local.ETag))
+        {
+            return new ReconcileAction(
+                ReconcileActionType.Conflict,
+                localPath,
+                remotePath,
+                baseline.FileId,
+                local,
+                baseline,
+                remote);
+        }
+
+        var localChanged = ConflictDetector.HasLocalChanged(local, baseline);
+        var remoteChanged = ConflictDetector.HasRemoteChanged(baseline, remote);
+
+        if (localChanged && remoteChanged)
+        {
+            return new ReconcileAction(
+                ReconcileActionType.Conflict,
+                localPath,
+                remotePath,
+                baseline.FileId,
+                local,
+                baseline,
+                remote);
+        }
+
+        SeedJournalBaseline(baseline, localChanged);
+
+        if (localChanged)
+        {
+            return new ReconcileAction(
+                ReconcileActionType.UploadChanged,
+                localPath,
+                remotePath,
+                baseline.FileId,
+                local,
+                baseline,
+                remote);
+        }
+
+        if (remoteChanged)
+        {
+            return new ReconcileAction(
+                ReconcileActionType.DownloadChanged,
+                localPath,
+                remotePath,
+                baseline.FileId,
+                local,
+                baseline,
+                remote);
+        }
+
+        return ReconcileAction.NoOp(localPath, remotePath, baseline.FileId, local, baseline, remote);
+    }
+
+    private static SyncJournalRecord CreateBaselineFromPlaceholder(
+        string localPath,
+        string remotePath,
+        PlaceholderInfo local,
+        RemoteItem remote) => new()
+    {
+        FileId = !string.IsNullOrWhiteSpace(local.FileId)
+            ? local.FileId
+            : SyncIdentity.RemotePathFallbackId(remote.RemotePath),
+        LocalPath = localPath,
+        RemotePath = remotePath,
+        ETag = local.ETag,
+        MTimeUtc = local.MTimeUtc.ToUniversalTime(),
+        Size = local.LogicalSize,
+        Checksum = null,
+        PinState = null,
+        IsDirectory = local.IsDirectory,
+        BaseETag = local.ETag,
+        LocalPendingOp = null
+    };
+
+    private void SeedJournalBaseline(SyncJournalRecord baseline, bool localChanged)
+    {
+        baseline.InSync = !localChanged;
+        baseline.LocalPendingOp = null;
+        _journal.Upsert(baseline);
     }
 }
