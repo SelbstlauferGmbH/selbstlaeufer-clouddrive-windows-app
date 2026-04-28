@@ -166,6 +166,199 @@ public class DiscoveryWalkerTests
         actions.ShouldNotContain(a => a.RemotePath.Contains("~WR", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalPlaceholderMatchesRemote_EmitsNoOpAndSeedsJournal()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: "etag-1",
+            remoteETag: "etag-1",
+            localInSync: true,
+            logicalSize: 6,
+            remoteSize: 6);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.NoOp);
+        result.SeededRecord.ShouldNotBeNull();
+        result.SeededRecord.ETag.ShouldBe("etag-1");
+        result.SeededRecord.BaseETag.ShouldBe("etag-1");
+        result.SeededRecord.Size.ShouldBe(6);
+        result.SeededRecord.MTimeUtc.ShouldNotBeNull();
+        result.SeededRecord.MTimeUtc.Value.ToUniversalTime().ShouldBe(result.LocalMTimeUtc);
+        result.SeededRecord.InSync.ShouldBeTrue();
+        result.SeededRecord.LocalPendingOp.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalRemoteChanged_EmitsDownloadChangedAndSeedsPlaceholderBaseline()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: "etag-1",
+            remoteETag: "etag-2",
+            localInSync: true);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.DownloadChanged);
+        result.SeededRecord.ShouldNotBeNull();
+        result.SeededRecord.ETag.ShouldBe("etag-1");
+        result.SeededRecord.BaseETag.ShouldBe("etag-1");
+        result.SeededRecord.InSync.ShouldBeTrue();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalLocalChanged_EmitsUploadChangedAndSeedsPlaceholderBaseline()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: "etag-1",
+            remoteETag: "etag-1",
+            localInSync: false);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.UploadChanged);
+        result.SeededRecord.ShouldNotBeNull();
+        result.SeededRecord.ETag.ShouldBe("etag-1");
+        result.SeededRecord.InSync.ShouldBeFalse();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalBothLocalAndRemoteChanged_EmitsConflictWithoutSeeding()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: "etag-1",
+            remoteETag: "etag-2",
+            localInSync: false);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.Conflict);
+        result.SeededRecord.ShouldBeNull();
+        result.Action.Journal.ShouldNotBeNull();
+        result.Action.Journal.ETag.ShouldBe("etag-1");
+        result.Action.Journal.BaseETag.ShouldBe("etag-1");
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalLocalPlaceholderHasNoRemote_EmitsUploadNewWithoutSeeding()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: "etag-1",
+            remoteETag: null,
+            localInSync: true,
+            includeRemote: false);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.UploadNew);
+        result.SeededRecord.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalDirectoryPlaceholderHasRemoteDirectory_EmitsNoOpAndSeedsJournal()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            name: "docs",
+            localETag: "local-dir-etag",
+            remoteETag: null,
+            localInSync: true,
+            localIsDirectory: true,
+            remoteIsDirectory: true,
+            logicalSize: 0,
+            remoteSize: 0);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.NoOp);
+        result.SeededRecord.ShouldNotBeNull();
+        result.SeededRecord.IsDirectory.ShouldBeTrue();
+        result.SeededRecord.ETag.ShouldBe("local-dir-etag");
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalFilePlaceholderHasNoETag_EmitsConflictWithoutSeeding()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            localETag: null,
+            remoteETag: "etag-remote",
+            localInSync: true);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.Conflict);
+        result.SeededRecord.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenEmptyJournalLocalFileMatchesRemoteDirectory_EmitsConflictWithoutSeeding()
+    {
+        var result = await WalkEmptyJournalPlaceholderAsync(
+            name: "mixed",
+            localETag: "etag-1",
+            remoteETag: null,
+            localInSync: true,
+            localIsDirectory: false,
+            remoteIsDirectory: true);
+
+        result.Action.Type.ShouldBe(ReconcileActionType.Conflict);
+        result.SeededRecord.ShouldBeNull();
+    }
+
+    private static async Task<EmptyJournalWalkResult> WalkEmptyJournalPlaceholderAsync(
+        string name = "report.txt",
+        string? localETag = "etag-1",
+        string? remoteETag = "etag-1",
+        bool localInSync = true,
+        bool localIsDirectory = false,
+        bool remoteIsDirectory = false,
+        bool includeRemote = true,
+        long logicalSize = 6,
+        long remoteSize = 6)
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var localPath = Path.Combine(tempDir.Path, name);
+        var remotePath = "/" + name.Replace('\\', '/');
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        var create = await vfs.CreatePlaceholderAsync(
+            localPath,
+            new VfsMetadata(
+                "file-1",
+                remotePath,
+                localETag,
+                logicalSize,
+                mtimeUtc,
+                localIsDirectory,
+                InSync: localInSync),
+            CancellationToken.None);
+        create.Succeeded.ShouldBeTrue();
+
+        if (includeRemote)
+        {
+            if (remoteIsDirectory)
+            {
+                webDav.AddDirectory(remotePath);
+            }
+            else
+            {
+                webDav.AddFile(remotePath, new byte[remoteSize], remoteETag);
+            }
+        }
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+        var action = actions.Single(a => string.Equals(a.LocalPath, localPath, StringComparison.OrdinalIgnoreCase));
+        var seededRecord = journal.GetByLocalPath(localPath);
+
+        return new EmptyJournalWalkResult(action, seededRecord, localPath, remotePath, mtimeUtc.ToUniversalTime());
+    }
+
+    private sealed record EmptyJournalWalkResult(
+        ReconcileAction Action,
+        SyncJournalRecord? SeededRecord,
+        string LocalPath,
+        string RemotePath,
+        DateTime LocalMTimeUtc);
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()
