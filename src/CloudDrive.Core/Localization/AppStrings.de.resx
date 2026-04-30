@@ -954,6 +954,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="SyncStatus_Conflict" xml:space="preserve">
     <value>Konflikt</value>
   </data>
+  <data name="SyncStatus_RemoteDeletePendingUserChoice" xml:space="preserve">
+    <value>Entscheidung noetig</value>
+  </data>
   <data name="Time_SecondAgo" xml:space="preserve">
     <value>vor {0} Sekunde</value>
   </data>
@@ -1001,6 +1004,12 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Problem_Action_KeepRemote" xml:space="preserve">
     <value>Remote-Kopie behalten</value>
+  </data>
+  <data name="Problem_Action_ReuploadLocal" xml:space="preserve">
+    <value>Lokale Kopie erneut hochladen</value>
+  </data>
+  <data name="Problem_Action_DeleteLocal" xml:space="preserve">
+    <value>Lokal loeschen</value>
   </data>
   <data name="Problem_CannotReachServer_Title" xml:space="preserve">
     <value>Server nicht erreichbar</value>
@@ -1068,6 +1077,15 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_RemoteDeleteConfirmation_Detail" xml:space="preserve">
     <value>Remote-Pfad: {0}</value>
   </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Title" xml:space="preserve">
+    <value>Server hat {0} geloescht</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Summary" xml:space="preserve">
+    <value>Die Serverkopie wurde geloescht, aber die lokale Datei wurde geaendert, waehrend CloudDrive offline war.</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Detail" xml:space="preserve">
+    <value>Remote-Pfad: {0}</value>
+  </data>
   <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
     <value>{0} konnte auf dem Server nicht gelöscht werden</value>
   </data>
@@ -1113,8 +1131,29 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_Kind_RemoteDeleteConfirmation" xml:space="preserve">
     <value>Löschbestätigung</value>
   </data>
+  <data name="Problem_Kind_RemoteDeletedLocalChanged" xml:space="preserve">
+    <value>Remote-Loeschung</value>
+  </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_One" xml:space="preserve">
+    <value>Server hat {0} geloescht</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_Many" xml:space="preserve">
+    <value>Server hat {0} lokale Elemente geloescht</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_One" xml:space="preserve">
+    <value>Die Serverkopie wurde entfernt, aber Ihre lokale Kopie hat Aenderungen. Waehlen Sie, was CloudDrive tun soll.</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_Many" xml:space="preserve">
+    <value>Der Server hat diese Elemente entfernt, waehrend lokale Kopien Aenderungen haben. Waehlen Sie eine Aktion fuer alle.</value>
+  </data>
+  <data name="RemoteDeleteDecision_DecideLater" xml:space="preserve">
+    <value>Spaeter entscheiden</value>
+  </data>
+  <data name="RemoteDeleteDecision_RemotePath" xml:space="preserve">
+    <value>Remote: {0}</value>
   </data>
   <data name="Problem_Occurrence_First" xml:space="preserve">
     <value>Erstmalig aufgetreten</value>

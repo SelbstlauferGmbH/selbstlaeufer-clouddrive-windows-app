@@ -411,6 +411,22 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         await RefreshAsync();
     }
 
+    public async Task ReuploadRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        if (_dashboardContext.ReuploadRemoteDeletedLocalChangeAsync != null)
+            await _dashboardContext.ReuploadRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+
+        await RefreshAsync();
+    }
+
+    public async Task DeleteLocalRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        if (_dashboardContext.DeleteLocalRemoteDeletedLocalChangeAsync != null)
+            await _dashboardContext.DeleteLocalRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+
+        await RefreshAsync();
+    }
+
     public async Task TriggerSyncNowAsync()
     {
         if (_dashboardContext.SyncNowAsync != null)

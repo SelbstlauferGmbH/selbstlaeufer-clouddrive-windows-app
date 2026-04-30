@@ -1184,7 +1184,8 @@ public class DatabaseStatistics
     public long PendingItems =>
         GetCount(SyncStatus.PendingUpload) +
         GetCount(SyncStatus.PendingDownload) +
-        GetCount(SyncStatus.Syncing);
+        GetCount(SyncStatus.Syncing) +
+        GetCount(SyncStatus.RemoteDeletePendingUserChoice);
     public long ErrorItems =>
         GetCount(SyncStatus.Error) +
         GetCount(SyncStatus.Conflict);

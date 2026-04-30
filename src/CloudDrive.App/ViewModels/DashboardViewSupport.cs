@@ -38,6 +38,8 @@ public sealed class AppDashboardContext
         DateTime startedAt,
         Func<long, string, string, Task>? confirmRemoteDeleteAsync = null,
         Func<long, string, string, Task>? keepRemoteCopyAsync = null,
+        Func<long, string, string, Task>? reuploadRemoteDeletedLocalChangeAsync = null,
+        Func<long, string, string, Task>? deleteLocalRemoteDeletedLocalChangeAsync = null,
         Action? applyUpdateAndRestart = null)
     {
         ActivityTracker = activityTracker;
@@ -57,6 +59,8 @@ public sealed class AppDashboardContext
         StartedAt = startedAt;
         ConfirmRemoteDeleteAsync = confirmRemoteDeleteAsync;
         KeepRemoteCopyAsync = keepRemoteCopyAsync;
+        ReuploadRemoteDeletedLocalChangeAsync = reuploadRemoteDeletedLocalChangeAsync;
+        DeleteLocalRemoteDeletedLocalChangeAsync = deleteLocalRemoteDeletedLocalChangeAsync;
         ApplyUpdateAndRestart = applyUpdateAndRestart ?? (() => { });
     }
 
@@ -77,6 +81,8 @@ public sealed class AppDashboardContext
     public DateTime StartedAt { get; }
     public Func<long, string, string, Task>? ConfirmRemoteDeleteAsync { get; }
     public Func<long, string, string, Task>? KeepRemoteCopyAsync { get; }
+    public Func<long, string, string, Task>? ReuploadRemoteDeletedLocalChangeAsync { get; }
+    public Func<long, string, string, Task>? DeleteLocalRemoteDeletedLocalChangeAsync { get; }
     public Action ApplyUpdateAndRestart { get; }
 }
 
@@ -204,6 +210,8 @@ public enum ProblemActionKind
     OpenSettings,
     ConfirmRemoteDelete,
     KeepRemoteCopy,
+    ReuploadRemoteDeletedLocalChange,
+    DeleteLocalRemoteDeletedLocalChange,
     Dismiss
 }
 
@@ -896,7 +904,7 @@ public static class DashboardBuilder
                 {
                     SyncStatus.Synced => BrushFromRgb(34, 197, 94),
                     SyncStatus.Syncing => BrushFromRgb(59, 130, 246),
-                    SyncStatus.PendingUpload or SyncStatus.PendingDownload => BrushFromRgb(245, 158, 11),
+                    SyncStatus.PendingUpload or SyncStatus.PendingDownload or SyncStatus.RemoteDeletePendingUserChoice => BrushFromRgb(245, 158, 11),
                     SyncStatus.Error or SyncStatus.Conflict => BrushFromRgb(220, 38, 38),
                     _ => BrushFromRgb(148, 163, 184)
                 }
@@ -1022,6 +1030,7 @@ public static class DashboardBuilder
                 SyncProblemType.Connection => L("Problem_Kind_Connection"),
                 SyncProblemType.RemoteLock => L("Problem_Kind_RemoteLock"),
                 SyncProblemType.RemoteDeleteConfirmation => L("Problem_Kind_RemoteDeleteConfirmation"),
+                SyncProblemType.RemoteDeletedLocalChanged => L("Problem_Kind_RemoteDeletedLocalChanged"),
                 SyncProblemType.RemoteListing or SyncProblemType.RemoteSync => L("Problem_Kind_SyncError"),
                 SyncProblemType.Upload => L("Problem_Kind_UploadError"),
                 SyncProblemType.Download => L("Problem_Kind_DownloadError"),
@@ -1038,7 +1047,7 @@ public static class DashboardBuilder
             FolderPath = folderPath,
             PrimaryAction = primaryAction,
             SecondaryAction = secondaryAction,
-            DismissAction = problem.ProblemType == SyncProblemType.RemoteDeleteConfirmation
+            DismissAction = problem.ProblemType is SyncProblemType.RemoteDeleteConfirmation or SyncProblemType.RemoteDeletedLocalChanged
                 ? null
                 : new ProblemDisplayAction
                 {
@@ -1114,6 +1123,20 @@ public static class DashboardBuilder
             };
         }
 
+        if (problem.ProblemType == SyncProblemType.RemoteDeletedLocalChanged &&
+            !string.IsNullOrWhiteSpace(problem.LocalPath) &&
+            !string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return new ProblemDisplayAction
+            {
+                Kind = ProblemActionKind.ReuploadRemoteDeletedLocalChange,
+                Label = L("Problem_Action_ReuploadLocal"),
+                Path = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                ProblemId = problem.Id
+            };
+        }
+
         if (!string.IsNullOrWhiteSpace(problem.LocalPath) &&
             (File.Exists(problem.LocalPath) || Directory.Exists(problem.LocalPath)))
         {
@@ -1147,6 +1170,20 @@ public static class DashboardBuilder
             {
                 Kind = ProblemActionKind.KeepRemoteCopy,
                 Label = L("Problem_Action_KeepRemote"),
+                Path = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                ProblemId = problem.Id
+            };
+        }
+
+        if (problem.ProblemType == SyncProblemType.RemoteDeletedLocalChanged &&
+            !string.IsNullOrWhiteSpace(problem.LocalPath) &&
+            !string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return new ProblemDisplayAction
+            {
+                Kind = ProblemActionKind.DeleteLocalRemoteDeletedLocalChange,
+                Label = L("Problem_Action_DeleteLocal"),
                 Path = problem.LocalPath,
                 RemotePath = problem.RemotePath,
                 ProblemId = problem.Id
@@ -1399,6 +1436,10 @@ public static class DashboardBuilder
                 problem.Title,
                 problem.Summary,
                 problem.Details),
+            SyncProblemType.RemoteDeletedLocalChanged => (
+                problem.Title,
+                problem.Summary,
+                problem.Details),
             SyncProblemType.RemoteListing => (
                 L("Problem_RemoteFolder_Title"),
                 L("Problem_RemoteFolder_Summary"),
@@ -1487,6 +1528,7 @@ public static class DashboardBuilder
             SyncStatus.Synced => L("SyncStatus_Synced"),
             SyncStatus.Error => L("SyncStatus_Error"),
             SyncStatus.Conflict => L("SyncStatus_Conflict"),
+            SyncStatus.RemoteDeletePendingUserChoice => L("SyncStatus_RemoteDeletePendingUserChoice"),
             _ => syncStatus.ToString()
         };
     }

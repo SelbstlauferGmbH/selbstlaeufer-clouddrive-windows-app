@@ -954,6 +954,9 @@ Do you want to restart CloudDrive now?</value>
   <data name="SyncStatus_Conflict" xml:space="preserve">
     <value>Conflict</value>
   </data>
+  <data name="SyncStatus_RemoteDeletePendingUserChoice" xml:space="preserve">
+    <value>Needs decision</value>
+  </data>
   <data name="Time_SecondAgo" xml:space="preserve">
     <value>{0} second ago</value>
   </data>
@@ -1001,6 +1004,12 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Problem_Action_KeepRemote" xml:space="preserve">
     <value>Keep remote copy</value>
+  </data>
+  <data name="Problem_Action_ReuploadLocal" xml:space="preserve">
+    <value>Reupload local copy</value>
+  </data>
+  <data name="Problem_Action_DeleteLocal" xml:space="preserve">
+    <value>Delete locally</value>
   </data>
   <data name="Problem_CannotReachServer_Title" xml:space="preserve">
     <value>Cannot reach server</value>
@@ -1068,6 +1077,15 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_RemoteDeleteConfirmation_Detail" xml:space="preserve">
     <value>Remote path: {0}</value>
   </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Title" xml:space="preserve">
+    <value>Server deleted {0}</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Summary" xml:space="preserve">
+    <value>The server copy was deleted, but the local file changed while CloudDrive was offline.</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Detail" xml:space="preserve">
+    <value>Remote path: {0}</value>
+  </data>
   <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
     <value>Failed to delete {0} on the server</value>
   </data>
@@ -1113,8 +1131,29 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_Kind_RemoteDeleteConfirmation" xml:space="preserve">
     <value>Delete confirmation</value>
   </data>
+  <data name="Problem_Kind_RemoteDeletedLocalChanged" xml:space="preserve">
+    <value>Remote deletion</value>
+  </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_One" xml:space="preserve">
+    <value>Server deleted {0}</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_Many" xml:space="preserve">
+    <value>Server deleted {0} local items</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_One" xml:space="preserve">
+    <value>The server copy was removed, but your local copy has changes. Choose what CloudDrive should do.</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_Many" xml:space="preserve">
+    <value>The server removed these items while local copies have changes. Choose one action for all of them.</value>
+  </data>
+  <data name="RemoteDeleteDecision_DecideLater" xml:space="preserve">
+    <value>Decide later</value>
+  </data>
+  <data name="RemoteDeleteDecision_RemotePath" xml:space="preserve">
+    <value>Remote: {0}</value>
   </data>
   <data name="Problem_Occurrence_First" xml:space="preserve">
     <value>First occurrence</value>

@@ -15,7 +15,8 @@ public enum ReconcileActionType
     MoveLocal = 6,
     DeleteRemote = 7,
     DeleteLocal = 8,
-    Conflict = 9
+    Conflict = 9,
+    RemoteDeletedLocalChanged = 10
 }
 
 public sealed record ReconcileAction(

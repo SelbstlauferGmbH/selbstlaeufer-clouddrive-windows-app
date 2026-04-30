@@ -36,10 +36,16 @@
     Compatibility switch. The app starts by default; this switch is accepted so
     older commands keep working.
 
+.PARAMETER Seed
+    After the WebDAV server is healthy, populate it with a curated tree of test
+    files (varied sizes, kinds, and naming edge cases) under /seed/. Off by
+    default; see tests/seed-webdav.ps1 for the exact contents.
+
 .EXAMPLE
     tests/start-local.ps1
     tests/start-local.ps1 -NoBuild -NoAppPublish
     tests/start-local.ps1 -ServerOnly
+    tests/start-local.ps1 -Seed
 #>
 param(
     [switch] $SkipClean,
@@ -47,7 +53,8 @@ param(
     [switch] $NoAppPublish,
     [switch] $ServerOnly,
     [string] $OutputFolder = "",
-    [switch] $StartApp
+    [switch] $StartApp,
+    [switch] $Seed
 )
 
 Set-StrictMode -Version Latest
@@ -67,6 +74,7 @@ function Write-Fail($msg) { Write-Host "  !!  $msg" -ForegroundColor Red; throw 
 function Write-Note($msg) { Write-Host "     $msg" -ForegroundColor Gray }
 
 . (Join-Path $PSScriptRoot "native-command.ps1")
+. (Join-Path $PSScriptRoot "seed-webdav.ps1")
 
 function Save-SessionState {
     param(
@@ -286,6 +294,14 @@ $sessionState = [ordered]@{
 }
 Save-SessionState -SessionState $sessionState -StateFile $stateFile
 Write-Ok "Session state written -> .session.json"
+
+# -- 5. Seed WebDAV (opt-in) ---------------------------------------------------
+if ($Seed) {
+    Invoke-WebDavSeed `
+        -Url      $sessionState["webdav_url"] `
+        -Username $sessionState["webdav_user"] `
+        -Password "testpass"
+}
 
 function Write-SessionReady {
     Write-Step "Session ready"

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using CloudDrive.App.Services;
 using CloudDrive.App.Tray;
 using CloudDrive.App.ViewModels;
@@ -37,6 +38,11 @@ public partial class App : System.Windows.Application
     private Stopwatch? _serverWaitStopwatch;
     private Stopwatch? _disconnectionStopwatch;
     private readonly DateTime _appStartedAt = DateTime.Now;
+    private readonly List<SyncProblem> _remoteDeleteDecisionQueue = [];
+    private readonly HashSet<string> _remoteDeleteDecisionQueuedKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _remoteDeleteDecisionPromptedKeys = new(StringComparer.OrdinalIgnoreCase);
+    private DispatcherTimer? _remoteDeleteDecisionTimer;
+    private bool _remoteDeleteDecisionDialogOpen;
     private int _fatalExceptionHandled;
 
     public App(AppLaunchOptions? launchOptions = null)
@@ -268,6 +274,10 @@ public partial class App : System.Windows.Application
                     localizer.Format("Tray_Balloon_CannotReachServer", url),
                     System.Windows.Forms.ToolTipIcon.Warning));
             };
+            svc.ProblemReported += problem =>
+            {
+                Dispatcher.Invoke(() => QueueRemoteDeleteDecision(problem));
+            };
 
             // Mount lifecycle phase notifications
             WireMountPhaseNotifications(svc);
@@ -444,6 +454,8 @@ public partial class App : System.Windows.Application
             _appStartedAt,
             ConfirmRemoteDeleteAsync,
             KeepRemoteCopyAsync,
+            ReuploadRemoteDeletedLocalChangeAsync,
+            DeleteLocalRemoteDeletedLocalChangeAsync,
             updateService.ApplyUpdateAndRestart);
     }
 
@@ -463,6 +475,202 @@ public partial class App : System.Windows.Application
             return;
 
         await coordinator.KeepRemoteCopyAsync(problemId, localPath, remotePath);
+    }
+
+    private async Task ReuploadRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.ReuploadRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+    }
+
+    private async Task DeleteLocalRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.DeleteLocalRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+    }
+
+    private void QueueRemoteDeleteDecision(SyncProblem problem)
+    {
+        if (problem.ProblemType != SyncProblemType.RemoteDeletedLocalChanged ||
+            string.IsNullOrWhiteSpace(problem.LocalPath) ||
+            string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return;
+        }
+
+        var key = GetRemoteDeleteDecisionKey(problem);
+        if (string.IsNullOrWhiteSpace(key) ||
+            _remoteDeleteDecisionPromptedKeys.Contains(key) ||
+            !_remoteDeleteDecisionQueuedKeys.Add(key))
+        {
+            return;
+        }
+
+        _remoteDeleteDecisionQueue.Add(problem);
+        _remoteDeleteDecisionTimer ??= CreateRemoteDeleteDecisionTimer();
+        _remoteDeleteDecisionTimer.Stop();
+        _remoteDeleteDecisionTimer.Start();
+    }
+
+    private DispatcherTimer CreateRemoteDeleteDecisionTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
+        timer.Tick += RemoteDeleteDecisionTimer_Tick;
+        return timer;
+    }
+
+    private async void RemoteDeleteDecisionTimer_Tick(object? sender, EventArgs e)
+    {
+        _remoteDeleteDecisionTimer?.Stop();
+        await ShowRemoteDeleteDecisionPromptAsync();
+    }
+
+    private async Task ShowRemoteDeleteDecisionPromptAsync()
+    {
+        if (_remoteDeleteDecisionDialogOpen)
+            return;
+
+        var problems = _remoteDeleteDecisionQueue.ToList();
+        _remoteDeleteDecisionQueue.Clear();
+        _remoteDeleteDecisionQueuedKeys.Clear();
+
+        var items = BuildRemoteDeleteDecisionItems(problems);
+        if (items.Count == 0)
+            return;
+
+        foreach (var problem in problems)
+        {
+            var key = GetRemoteDeleteDecisionKey(problem);
+            if (!string.IsNullOrWhiteSpace(key))
+                _remoteDeleteDecisionPromptedKeys.Add(key);
+        }
+
+        _remoteDeleteDecisionDialogOpen = true;
+        try
+        {
+            var owner = GetModalOwner();
+            var dialog = new RemoteDeleteDecisionWindow(items);
+            if (owner != null)
+            {
+                dialog.Owner = owner;
+                dialog.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                dialog.Topmost = true;
+                dialog.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+            }
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (dialog.Decision == RemoteDeleteDecision.Reupload)
+                    await ReuploadRemoteDeletedLocalChangesAsync(items);
+                else if (dialog.Decision == RemoteDeleteDecision.DeleteLocal)
+                    await DeleteLocalRemoteDeletedLocalChangesAsync(items);
+            }
+        }
+        finally
+        {
+            _remoteDeleteDecisionDialogOpen = false;
+            if (_remoteDeleteDecisionQueue.Count > 0)
+            {
+                _remoteDeleteDecisionTimer?.Stop();
+                _remoteDeleteDecisionTimer?.Start();
+            }
+        }
+    }
+
+    private IReadOnlyList<RemoteDeleteDecisionItem> BuildRemoteDeleteDecisionItems(IReadOnlyList<SyncProblem> problems)
+    {
+        var settings = AppSettings.Load();
+        var localizer = AppLocalizer.Instance;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<RemoteDeleteDecisionItem>();
+
+        foreach (var problem in problems)
+        {
+            if (string.IsNullOrWhiteSpace(problem.LocalPath) || string.IsNullOrWhiteSpace(problem.RemotePath))
+                continue;
+
+            var key = GetRemoteDeleteDecisionKey(problem);
+            if (string.IsNullOrWhiteSpace(key) ||
+                _remoteDeleteDecisionPromptedKeys.Contains(key) ||
+                !seen.Add(key))
+            {
+                continue;
+            }
+
+            var displayName = Path.GetFileName(problem.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(displayName))
+                displayName = problem.LocalPath;
+
+            items.Add(new RemoteDeleteDecisionItem
+            {
+                ProblemId = problem.Id,
+                LocalPath = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                DisplayName = displayName,
+                Location = GetRemoteDeleteDecisionLocation(settings.SyncRootPath, problem.LocalPath),
+                RemotePathDisplay = localizer.Format("RemoteDeleteDecision_RemotePath", problem.RemotePath)
+            });
+        }
+
+        return items;
+    }
+
+    private async Task ReuploadRemoteDeletedLocalChangesAsync(IReadOnlyList<RemoteDeleteDecisionItem> items)
+    {
+        foreach (var item in items)
+            await ReuploadRemoteDeletedLocalChangeAsync(item.ProblemId, item.LocalPath, item.RemotePath);
+    }
+
+    private async Task DeleteLocalRemoteDeletedLocalChangesAsync(IReadOnlyList<RemoteDeleteDecisionItem> items)
+    {
+        foreach (var item in items)
+            await DeleteLocalRemoteDeletedLocalChangeAsync(item.ProblemId, item.LocalPath, item.RemotePath);
+    }
+
+    private System.Windows.Window? GetModalOwner()
+    {
+        if (_settingsWindow?.IsVisible == true)
+            return _settingsWindow;
+
+        if (_activityPanel?.IsVisible == true)
+            return _activityPanel;
+
+        return null;
+    }
+
+    private static string? GetRemoteDeleteDecisionKey(SyncProblem problem)
+    {
+        if (!string.IsNullOrWhiteSpace(problem.DedupeKey))
+            return problem.DedupeKey;
+
+        return !string.IsNullOrWhiteSpace(problem.LocalPath)
+            ? SyncProblemKeys.RemoteDeletedLocalChanged(problem.LocalPath)
+            : null;
+    }
+
+    private static string GetRemoteDeleteDecisionLocation(string syncRootPath, string localPath)
+    {
+        try
+        {
+            var relative = Path.GetRelativePath(syncRootPath, localPath);
+            if (!relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative))
+                return relative;
+        }
+        catch
+        {
+            // Fall back to the full path when the sync root and item cannot be relativized.
+        }
+
+        return localPath;
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()

@@ -313,6 +313,24 @@ public partial class SettingsWindow : Window
                 }
                 break;
 
+            case ProblemActionKind.ReuploadRemoteDeletedLocalChange:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath))
+                {
+                    await vm.ReuploadRemoteDeletedLocalChangeAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                }
+                break;
+
+            case ProblemActionKind.DeleteLocalRemoteDeletedLocalChange:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath))
+                {
+                    await vm.DeleteLocalRemoteDeletedLocalChangeAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                }
+                break;
+
             case ProblemActionKind.Dismiss:
                 if (action.ProblemId.HasValue)
                     await vm.DismissProblemAsync(action.ProblemId.Value);

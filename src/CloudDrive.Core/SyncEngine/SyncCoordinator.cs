@@ -390,6 +390,75 @@ public class SyncCoordinator : IDisposable
         _problemService.Resolve(problemId);
     }
 
+    public async Task ReuploadRemoteDeletedLocalChangeAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        if (!File.Exists(localPath) && !Directory.Exists(localPath))
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return;
+        }
+
+        journalRecord ??= CreateJournalRecordFromLocalState(localPath, remotePath, syncItem);
+        ClearRemoteDeletedLocalChangedPending(journalRecord);
+
+        var remote = await _webDav.GetPropertiesAsync(remotePath, ct);
+        var enqueued = EnqueueAction(new ReconcileAction(
+            ReconcileActionType.UploadChanged,
+            localPath,
+            remotePath,
+            journalRecord.FileId,
+            Local: null,
+            Journal: journalRecord,
+            Remote: remote));
+        if (enqueued)
+            _problemService.Resolve(problemId);
+    }
+
+    public Task DeleteLocalRemoteDeletedLocalChangeAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return Task.CompletedTask;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        if (!File.Exists(localPath) && !Directory.Exists(localPath))
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return Task.CompletedTask;
+        }
+
+        journalRecord ??= CreateJournalRecordFromLocalState(localPath, remotePath, syncItem);
+        ClearRemoteDeletedLocalChangedPending(journalRecord);
+
+        var enqueued = EnqueueAction(new ReconcileAction(
+            ReconcileActionType.DeleteLocal,
+            localPath,
+            remotePath,
+            journalRecord.FileId,
+            Local: null,
+            Journal: journalRecord,
+            Remote: null));
+        if (enqueued)
+            _problemService.Resolve(problemId);
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Records a WebDAV operation failure. When 3 consecutive failures occur,
     /// signals connection loss to cfapi and starts the reconnection loop.
@@ -772,6 +841,12 @@ public class SyncCoordinator : IDisposable
             return false;
         }
 
+        if (action.Type == ReconcileActionType.RemoteDeletedLocalChanged)
+        {
+            ReportRemoteDeletedLocalChanged(action);
+            return false;
+        }
+
         var job = _propagatorQueue.Enqueue(action);
         _logger.LogInformation(
             "Queued reconcile action for propagation: Type={Type} Path={Path} OperationId={OperationId}",
@@ -810,6 +885,80 @@ public class SyncCoordinator : IDisposable
             record.InSync = true;
             _journal.Upsert(record);
         }
+    }
+
+    private void ClearRemoteDeletedLocalChangedPending(SyncJournalRecord record)
+    {
+        if (string.Equals(
+                record.LocalPendingOp,
+                SyncPendingOperations.RemoteDeletedLocalChanged,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            record.LocalPendingOp = null;
+            record.InSync = false;
+            _journal.Upsert(record);
+        }
+    }
+
+    private void ReportRemoteDeletedLocalChanged(ReconcileAction action)
+    {
+        var journalRecord = action.Journal
+            ?? (!string.IsNullOrWhiteSpace(action.FileId) ? _journal.GetByFileId(action.FileId) : null)
+            ?? _journal.GetByLocalPath(action.LocalPath)
+            ?? _journal.GetByRemotePath(action.RemotePath)
+            ?? CreateJournalRecordFromLocalState(action.LocalPath, action.RemotePath, null);
+
+        journalRecord.LocalPendingOp = SyncPendingOperations.RemoteDeletedLocalChanged;
+        journalRecord.InSync = false;
+        _journal.Upsert(journalRecord);
+
+        var syncItem = _stateService.GetByLocalPath(action.LocalPath) ?? _stateService.GetByRemotePath(action.RemotePath);
+        if (syncItem != null)
+        {
+            syncItem.SyncStatus = SyncStatus.RemoteDeletePendingUserChoice;
+            _stateService.Upsert(syncItem);
+        }
+
+        var localizer = AppLocalizer.Instance;
+        var fileName = Path.GetFileName(action.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = Path.GetFileName(action.RemotePath);
+
+        _problemService.Report(new SyncProblem
+        {
+            DedupeKey = SyncProblemKeys.RemoteDeletedLocalChanged(action.LocalPath),
+            ProblemType = SyncProblemType.RemoteDeletedLocalChanged,
+            Severity = SyncProblemSeverity.Warning,
+            Title = localizer.Format("Problem_RemoteDeletedLocalChanged_Title", fileName),
+            Summary = localizer.GetString("Problem_RemoteDeletedLocalChanged_Summary"),
+            Details = localizer.Format("Problem_RemoteDeletedLocalChanged_Detail", action.RemotePath),
+            LocalPath = action.LocalPath,
+            RemotePath = action.RemotePath,
+            FirstOccurredAt = DateTime.UtcNow,
+            LastOccurredAt = DateTime.UtcNow
+        });
+    }
+
+    private static SyncJournalRecord CreateJournalRecordFromLocalState(
+        string localPath,
+        string remotePath,
+        SyncItem? syncItem)
+    {
+        var isDirectory = syncItem?.IsDirectory ?? Directory.Exists(localPath);
+        var fileInfo = !isDirectory && File.Exists(localPath) ? new FileInfo(localPath) : null;
+        return new SyncJournalRecord
+        {
+            FileId = SyncIdentity.RemotePathFallbackId(remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = isDirectory,
+            Size = syncItem?.FileSize ?? fileInfo?.Length ?? 0,
+            ETag = syncItem?.RemoteETag,
+            BaseETag = syncItem?.RemoteETag,
+            MTimeUtc = syncItem?.RemoteLastModified ?? fileInfo?.LastWriteTimeUtc ?? DateTime.UtcNow,
+            Checksum = syncItem?.LocalHash,
+            InSync = false
+        };
     }
 
     private void DeleteTrackedState(

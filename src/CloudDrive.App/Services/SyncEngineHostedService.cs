@@ -34,6 +34,7 @@ public class SyncEngineHostedService : BackgroundService
     public MountStateMachine? StateMachine => _stateMachine;
     public event Action<SyncState>? SyncStateChanged;
     public event Action<string>? ConnectionFailed;
+    public event Action<SyncProblem>? ProblemReported;
 
     public SyncEngineHostedService(ILoggerFactory loggerFactory, IActivityTracker? activityTracker = null)
     {
@@ -89,6 +90,7 @@ public class SyncEngineHostedService : BackgroundService
         // Create coordinator (but don't register/connect yet — wait for readiness gate)
         _coordinator = new SyncCoordinator(settings, webDav, _loggerFactory);
         _problemService = _coordinator.Problems;
+        _problemService.ProblemReported += problem => ProblemReported?.Invoke(problem);
         _windowsNotificationService = new WindowsNotificationService(
             _problemService,
             _loggerFactory.CreateLogger<WindowsNotificationService>(),

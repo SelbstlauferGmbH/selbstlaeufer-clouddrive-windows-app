@@ -632,6 +632,28 @@ public partial class ActivityPanel : Window
                 }
                 break;
 
+            case ProblemActionKind.ReuploadRemoteDeletedLocalChange:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath) &&
+                    _dashboardContext.ReuploadRemoteDeletedLocalChangeAsync != null)
+                {
+                    await _dashboardContext.ReuploadRemoteDeletedLocalChangeAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                    await RefreshAsync();
+                }
+                break;
+
+            case ProblemActionKind.DeleteLocalRemoteDeletedLocalChange:
+                if (action.ProblemId.HasValue &&
+                    !string.IsNullOrWhiteSpace(action.Path) &&
+                    !string.IsNullOrWhiteSpace(action.RemotePath) &&
+                    _dashboardContext.DeleteLocalRemoteDeletedLocalChangeAsync != null)
+                {
+                    await _dashboardContext.DeleteLocalRemoteDeletedLocalChangeAsync(action.ProblemId.Value, action.Path, action.RemotePath);
+                    await RefreshAsync();
+                }
+                break;
+
             case ProblemActionKind.Dismiss:
                 if (action.ProblemId.HasValue)
                 {
