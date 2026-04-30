@@ -7,22 +7,14 @@ namespace CloudDrive.Core.SyncRoot;
 public enum ExplorerItemState
 {
     Clear = 0,
-    Synced = 1,
-    Syncing = 2,
-    Conflict = 3,
-    Error = 4,
-    Pinned = 5,
-    Unpinned = 6
+    Conflict = 3
 }
 
 public sealed class ExplorerItemStateService
 {
-    public const int SyncedPropertyId = 1;
-    public const int SyncingPropertyId = 2;
+    // Availability badges are owned by Windows Cloud Files placeholder state.
+    // This custom item-property layer is only used for states CFAPI does not project.
     public const int ConflictPropertyId = 3;
-    public const int ErrorPropertyId = 4;
-    public const int PinnedPropertyId = 5;
-    public const int UnpinnedPropertyId = 6;
 
     private readonly ILogger<ExplorerItemStateService> _logger;
 
@@ -67,13 +59,8 @@ public sealed class ExplorerItemStateService
     {
         var (id, value, icon) = state switch
         {
-            ExplorerItemState.Synced => (SyncedPropertyId, "Synced", "%SystemRoot%\\system32\\imageres.dll,-1025"),
-            ExplorerItemState.Syncing => (SyncingPropertyId, "Syncing", "%SystemRoot%\\system32\\imageres.dll,-16739"),
             ExplorerItemState.Conflict => (ConflictPropertyId, "Conflict", "%SystemRoot%\\system32\\imageres.dll,-98"),
-            ExplorerItemState.Error => (ErrorPropertyId, "Error", "%SystemRoot%\\system32\\imageres.dll,-101"),
-            ExplorerItemState.Pinned => (PinnedPropertyId, "Pinned", "%SystemRoot%\\system32\\imageres.dll,-16710"),
-            ExplorerItemState.Unpinned => (UnpinnedPropertyId, "Online-only", "%SystemRoot%\\system32\\imageres.dll,-16711"),
-            _ => (SyncedPropertyId, "Synced", "%SystemRoot%\\system32\\imageres.dll,-1025")
+            _ => (ConflictPropertyId, "Conflict", "%SystemRoot%\\system32\\imageres.dll,-98")
         };
 
         return new StorageProviderItemProperty

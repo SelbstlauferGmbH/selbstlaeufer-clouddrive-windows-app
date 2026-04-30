@@ -595,12 +595,7 @@ public class SyncRootRegistrar
 
         var expectedPropertyIds = new HashSet<int>
         {
-            ExplorerItemStateService.SyncedPropertyId,
-            ExplorerItemStateService.SyncingPropertyId,
-            ExplorerItemStateService.ConflictPropertyId,
-            ExplorerItemStateService.ErrorPropertyId,
-            ExplorerItemStateService.PinnedPropertyId,
-            ExplorerItemStateService.UnpinnedPropertyId
+            ExplorerItemStateService.ConflictPropertyId
         };
         var registeredPropertyIds = existingRegistration.StorageProviderItemPropertyDefinitions
             .Select(definition => definition.Id)
@@ -635,33 +630,8 @@ public class SyncRootRegistrar
     {
         syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
         {
-            Id = ExplorerItemStateService.SyncedPropertyId,
-            DisplayNameResource = "Synced"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.SyncingPropertyId,
-            DisplayNameResource = "Syncing"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
             Id = ExplorerItemStateService.ConflictPropertyId,
             DisplayNameResource = "Conflict"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.ErrorPropertyId,
-            DisplayNameResource = "Error"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.PinnedPropertyId,
-            DisplayNameResource = "Pinned"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.UnpinnedPropertyId,
-            DisplayNameResource = "Online-only"
         });
     }
 

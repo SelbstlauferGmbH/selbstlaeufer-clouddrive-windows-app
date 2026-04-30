@@ -119,7 +119,12 @@ public class SyncCoordinator : IDisposable
             _stateService,
             _explorerItemStateService);
         _placeholderManager = new PlaceholderManager(webDav, _stateService, _pathMapper, loggerFactory.CreateLogger<PlaceholderManager>());
-        _projectionService = new SyncProjectionService(_placeholderManager, _stateService, cloudFileOperations, loggerFactory.CreateLogger<SyncProjectionService>());
+        _projectionService = new SyncProjectionService(
+            _placeholderManager,
+            _stateService,
+            cloudFileOperations,
+            loggerFactory.CreateLogger<SyncProjectionService>(),
+            _explorerItemStateService);
         _hydrationHandler = new HydrationHandler(webDav, _stateService, _pathMapper, _projectionService, loggerFactory.CreateLogger<HydrationHandler>(), _activeCloudRequestTracker);
         _dehydrationHandler = new DehydrationHandler(
             _stateService,
@@ -945,7 +950,7 @@ public class SyncCoordinator : IDisposable
                     {
                         _logger.LogError(ex, "Propagator job failed: {OperationId} {Type} {Path}", job.OperationId, job.JobType, job.LocalPath);
                         _propagatorQueue.Fail(job.OperationId, ex.Message);
-                        await _explorerItemStateService.SetStateAsync(job.LocalPath, ExplorerItemState.Error, ct);
+                        await _explorerItemStateService.SetStateAsync(job.LocalPath, ExplorerItemState.Clear, ct);
                         RecordConnectionFailure();
 
                         if (!_connectionState.IsConnectionLost)
