@@ -24,7 +24,6 @@ public class SyncEngineHostedService : BackgroundService
     private SyncCoordinator? _coordinator;
     private IWebDavService? _webDav;
     private MountStateMachine? _stateMachine;
-    private ExplorerStatusManager? _explorerStatusManager;
     private ISyncProblemService? _problemService;
     private WindowsNotificationService? _windowsNotificationService;
     private EventWaitHandle? _appRunningEvent;
@@ -35,6 +34,7 @@ public class SyncEngineHostedService : BackgroundService
     public MountStateMachine? StateMachine => _stateMachine;
     public event Action<SyncState>? SyncStateChanged;
     public event Action<string>? ConnectionFailed;
+    public event Action<SyncProblem>? ProblemReported;
 
     public SyncEngineHostedService(ILoggerFactory loggerFactory, IActivityTracker? activityTracker = null)
     {
@@ -90,19 +90,13 @@ public class SyncEngineHostedService : BackgroundService
         // Create coordinator (but don't register/connect yet — wait for readiness gate)
         _coordinator = new SyncCoordinator(settings, webDav, _loggerFactory);
         _problemService = _coordinator.Problems;
+        _problemService.ProblemReported += problem => ProblemReported?.Invoke(problem);
         _windowsNotificationService = new WindowsNotificationService(
             _problemService,
             _loggerFactory.CreateLogger<WindowsNotificationService>(),
             appUserModelId: "SelbstlaeuferGmbH.CloudDrive",
             enabled: settings.ShowNotifications);
         _coordinator.SetStateMachine(_stateMachine);
-
-        // Create ExplorerStatusManager and inject into coordinator
-        _explorerStatusManager = new ExplorerStatusManager(
-            _loggerFactory.CreateLogger<ExplorerStatusManager>(),
-            _coordinator.Registrar,
-            _coordinator.AccountId);
-        _coordinator.SetExplorerStatusManager(_explorerStatusManager);
 
         _coordinator.StateChanged += state => SyncStateChanged?.Invoke(state);
 
@@ -253,9 +247,6 @@ public class SyncEngineHostedService : BackgroundService
 
     private async Task RunReadinessGateAsync(IWebDavService webDav, AppSettings settings, CancellationToken ct)
     {
-        // Keep Explorer marked as disconnected until the mount is fully ready.
-        await _explorerStatusManager!.SetStateAsync(ExplorerVisualState.Disconnected, settings.SyncRootPath);
-
         // === Verify WebDAV connection ===
         _stateMachine!.TransitionTo(MountPhase.VerifyingConnection);
         LogActivity(AppLocalizer.Instance.GetString("Activity_VerifyingServerConnection"));
@@ -271,7 +262,6 @@ public class SyncEngineHostedService : BackgroundService
         {
             // Connection failed — enter waiting loop
             _stateMachine.TransitionTo(MountPhase.WaitingForServer);
-            await _explorerStatusManager!.SetStateAsync(ExplorerVisualState.Disconnected, settings.SyncRootPath);
             LogActivity(AppLocalizer.Instance.GetString("Activity_ServerConnectionWaiting"));
             _problemService?.Report(new SyncProblem
             {
@@ -383,11 +373,11 @@ public class SyncEngineHostedService : BackgroundService
         _windowsNotificationService?.Dispose();
         _windowsNotificationService = null;
 
-        // Persist a disconnected status in Explorer before releasing the presence handle.
-        if (_explorerStatusManager != null && _syncRootPath != null)
+        // Clear stale root status from older versions before releasing the presence handle.
+        if (_syncRootPath != null)
         {
-            try { await _explorerStatusManager.SetStateAsync(ExplorerVisualState.Disconnected, _syncRootPath); }
-            catch (Exception ex) { _logger.LogDebug(ex, "Failed to set Disconnected status on shutdown"); }
+            try { SyncRootConnector.ClearSyncStatus(_syncRootPath); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Failed to clear sync status on shutdown"); }
         }
 
         // Dispose app presence handle so watchdog detects app is gone

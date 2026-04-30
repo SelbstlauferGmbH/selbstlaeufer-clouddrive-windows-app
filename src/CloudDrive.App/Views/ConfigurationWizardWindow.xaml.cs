@@ -2,6 +2,8 @@ using System.ComponentModel;
 using System.Windows;
 using CloudDrive.App.Services;
 using CloudDrive.App.ViewModels;
+using CloudDrive.Core.Configuration;
+using CloudDrive.Core.Localization;
 
 namespace CloudDrive.App.Views;
 
@@ -41,11 +43,49 @@ public partial class ConfigurationWizardWindow : Window
             return;
         }
 
+        if (!vm.ValidateFinish())
+            return;
+
+        var targetChangeDecision = RemoteTargetChangeDecision.KeepLocalState;
+        AppSettings? previousSettings = null;
+
+        if (vm.HasRemoteTargetChanged())
+        {
+            previousSettings = vm.CreateSavedSettingsSnapshot();
+            targetChangeDecision = ShowRemoteTargetChangeDialog(
+                previousSettings.WebDavUrl,
+                vm.WebDavUrl);
+
+            if (targetChangeDecision == RemoteTargetChangeDecision.Cancel)
+            {
+                vm.StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_SaveCancelled");
+                return;
+            }
+        }
+
         if (await vm.FinishAsync())
         {
+            if (targetChangeDecision == RemoteTargetChangeDecision.ResetLocalState &&
+                previousSettings != null)
+            {
+                await vm.ResetLocalStateForRemoteTargetChangeAsync(previousSettings);
+            }
+
             DialogResult = true;
             Close();
         }
+    }
+
+    private RemoteTargetChangeDecision ShowRemoteTargetChangeDialog(string oldTarget, string newTarget)
+    {
+        var dialog = new RemoteTargetChangeWindow(oldTarget, newTarget)
+        {
+            Owner = this
+        };
+
+        return dialog.ShowDialog() == true
+            ? dialog.Decision
+            : RemoteTargetChangeDecision.Cancel;
     }
 
     private async void TestConnection_Click(object sender, RoutedEventArgs e)

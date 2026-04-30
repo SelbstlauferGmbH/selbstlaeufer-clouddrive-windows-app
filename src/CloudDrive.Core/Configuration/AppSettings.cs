@@ -69,6 +69,38 @@ public class AppSettings
         return GetAccountConfigurationStatus(hasPassword).IsComplete;
     }
 
+    public AppSettings Clone() => new()
+    {
+        WebDavUrl = WebDavUrl,
+        Username = Username,
+        SyncRootPath = SyncRootPath,
+        SyncRootAccountIdOverride = SyncRootAccountIdOverride,
+        AuthType = AuthType,
+        SyncIntervalSeconds = SyncIntervalSeconds,
+        MaxConcurrentTransfers = MaxConcurrentTransfers,
+        EnableFileLogging = EnableFileLogging,
+        ShowNotifications = ShowNotifications,
+        LaunchOnStartup = LaunchOnStartup,
+        ThemeMode = ThemeMode,
+        Language = Language,
+        SettingsWindowLeft = SettingsWindowLeft,
+        SettingsWindowTop = SettingsWindowTop,
+        SettingsWindowWidth = SettingsWindowWidth,
+        SettingsWindowHeight = SettingsWindowHeight,
+        DataDirectory = DataDirectory
+    };
+
+    public static bool HasWebDavTargetChanged(string? storedUrl, string? candidateUrl)
+    {
+        if (string.IsNullOrWhiteSpace(storedUrl) || string.IsNullOrWhiteSpace(candidateUrl))
+            return false;
+
+        return !string.Equals(
+            NormalizeWebDavTarget(storedUrl),
+            NormalizeWebDavTarget(candidateUrl),
+            StringComparison.Ordinal);
+    }
+
     public bool TryGetWebDavUri([NotNullWhen(true)] out Uri? uri)
     {
         return TryCreateWebDavUri(WebDavUrl, out uri);
@@ -91,6 +123,23 @@ public class AppSettings
         }
 
         return true;
+    }
+
+    private static string NormalizeWebDavTarget(string value)
+    {
+        var trimmed = value.Trim();
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+            return trimmed.TrimEnd('/', '\\');
+
+        var scheme = uri.Scheme.ToLowerInvariant();
+        var host = uri.IdnHost.ToLowerInvariant();
+        var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
+        var path = uri.AbsolutePath.TrimEnd('/');
+        var query = uri.Query;
+
+        return path.Length == 0 && query.Length == 0
+            ? $"{scheme}://{host}{port}"
+            : $"{scheme}://{host}{port}{path}{query}";
     }
 
     public static string GetDataDirectory() => SettingsDir;

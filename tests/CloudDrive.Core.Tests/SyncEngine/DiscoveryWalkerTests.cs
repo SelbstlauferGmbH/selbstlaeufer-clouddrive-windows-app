@@ -159,6 +159,258 @@ public class DiscoveryWalkerTests
 
     [Fact]
     [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedAndLocalFileUnchanged_EmitsDeleteLocal()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var localPath = Path.Combine(tempDir.Path, "gone.txt");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/gone.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = mtimeUtc,
+            InSync = true
+        });
+
+        var create = await vfs.CreatePlaceholderAsync(
+            localPath,
+            new VfsMetadata("file-1", "/gone.txt", "etag-1", 6, mtimeUtc, IsDirectory: false),
+            CancellationToken.None);
+        create.Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == localPath).Type.ShouldBe(ReconcileActionType.DeleteLocal);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedAndLocalFileChanged_EmitsRemoteDeletedLocalChanged()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var localPath = Path.Combine(tempDir.Path, "changed.txt");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/changed.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = mtimeUtc,
+            InSync = true
+        });
+
+        var create = await vfs.CreatePlaceholderAsync(
+            localPath,
+            new VfsMetadata("file-1", "/changed.txt", "etag-1", 12, DateTime.UtcNow, IsDirectory: false, InSync: false),
+            CancellationToken.None);
+        create.Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == localPath).Type.ShouldBe(ReconcileActionType.RemoteDeletedLocalChanged);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedAndDirectoryMetadataChanged_EmitsDeleteLocal()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var localPath = Path.Combine(tempDir.Path, "folder");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "dir-1",
+            LocalPath = localPath,
+            RemotePath = "/folder",
+            ETag = null,
+            Size = 0,
+            MTimeUtc = mtimeUtc,
+            InSync = true,
+            IsDirectory = true
+        });
+
+        var create = await vfs.CreatePlaceholderAsync(
+            localPath,
+            new VfsMetadata("dir-1", "/folder", null, 0, DateTime.UtcNow, IsDirectory: true, InSync: false),
+            CancellationToken.None);
+        create.Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == localPath).Type.ShouldBe(ReconcileActionType.DeleteLocal);
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.RemoteDeletedLocalChanged);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedLocalChangedIsPending_DoesNotEmitAnotherDecision()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var localPath = Path.Combine(tempDir.Path, "pending.txt");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = localPath,
+            RemotePath = "/pending.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = mtimeUtc,
+            InSync = false,
+            LocalPendingOp = SyncPendingOperations.RemoteDeletedLocalChanged
+        });
+
+        var create = await vfs.CreatePlaceholderAsync(
+            localPath,
+            new VfsMetadata("file-1", "/pending.txt", "etag-1", 12, DateTime.UtcNow, IsDirectory: false, InSync: false),
+            CancellationToken.None);
+        create.Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: 1, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == localPath).Type.ShouldBe(ReconcileActionType.NoOp);
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.RemoteDeletedLocalChanged);
+        actions.ShouldNotContain(a => a.Type == ReconcileActionType.DeleteLocal);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedFolderContainsChangedLocalFile_DoesNotDeleteParentFolder()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var folderPath = Path.Combine(tempDir.Path, "folder");
+        var filePath = Path.Combine(folderPath, "changed.txt");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "dir-1",
+            LocalPath = folderPath,
+            RemotePath = "/folder",
+            Size = 0,
+            MTimeUtc = mtimeUtc,
+            InSync = true,
+            IsDirectory = true
+        });
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = filePath,
+            RemotePath = "/folder/changed.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = mtimeUtc,
+            InSync = true
+        });
+
+        (await vfs.CreatePlaceholderAsync(
+            folderPath,
+            new VfsMetadata("dir-1", "/folder", null, 0, mtimeUtc, IsDirectory: true),
+            CancellationToken.None)).Succeeded.ShouldBeTrue();
+        (await vfs.CreatePlaceholderAsync(
+            filePath,
+            new VfsMetadata("file-1", "/folder/changed.txt", "etag-1", 12, DateTime.UtcNow, IsDirectory: false, InSync: false),
+            CancellationToken.None)).Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: int.MaxValue, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == filePath).Type.ShouldBe(ReconcileActionType.RemoteDeletedLocalChanged);
+        actions.ShouldNotContain(a => a.LocalPath == folderPath && a.Type == ReconcileActionType.DeleteLocal);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
+    public async Task WalkAsync_WhenRemoteDeletedFolderContainsPendingChangedLocalFile_DoesNotDeleteParentFolder()
+    {
+        using var tempDir = new TempDirectory();
+        await using var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var mapper = new PathMapper(tempDir.Path, "/");
+        var folderPath = Path.Combine(tempDir.Path, "folder");
+        var filePath = Path.Combine(folderPath, "changed.txt");
+        var mtimeUtc = DateTime.UtcNow.AddMinutes(-5);
+
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "dir-1",
+            LocalPath = folderPath,
+            RemotePath = "/folder",
+            Size = 0,
+            MTimeUtc = mtimeUtc,
+            InSync = true,
+            IsDirectory = true
+        });
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = filePath,
+            RemotePath = "/folder/changed.txt",
+            ETag = "etag-1",
+            Size = 6,
+            MTimeUtc = mtimeUtc,
+            InSync = false,
+            LocalPendingOp = SyncPendingOperations.RemoteDeletedLocalChanged
+        });
+
+        (await vfs.CreatePlaceholderAsync(
+            folderPath,
+            new VfsMetadata("dir-1", "/folder", null, 0, mtimeUtc, IsDirectory: true),
+            CancellationToken.None)).Succeeded.ShouldBeTrue();
+        (await vfs.CreatePlaceholderAsync(
+            filePath,
+            new VfsMetadata("file-1", "/folder/changed.txt", "etag-1", 12, DateTime.UtcNow, IsDirectory: false, InSync: false),
+            CancellationToken.None)).Succeeded.ShouldBeTrue();
+
+        var walker = new DiscoveryWalker(vfs, journal, webDav, mapper, NullLogger<DiscoveryWalker>.Instance);
+        var actions = await walker.WalkAsync(tempDir.Path, depth: int.MaxValue, CancellationToken.None);
+
+        actions.Single(a => a.LocalPath == filePath).Type.ShouldBe(ReconcileActionType.NoOp);
+        actions.ShouldNotContain(a => a.LocalPath == folderPath && a.Type == ReconcileActionType.DeleteLocal);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
     public async Task WalkAsync_WhenOnlyJournalRecordRemains_DoesNotEmitDeleteRemote()
     {
         using var tempDir = new TempDirectory();

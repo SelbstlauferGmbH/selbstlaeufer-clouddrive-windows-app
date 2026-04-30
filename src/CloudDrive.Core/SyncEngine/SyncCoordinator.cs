@@ -6,7 +6,6 @@ using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.Vfs;
 using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging;
-using static Vanara.PInvoke.CldApi;
 
 namespace CloudDrive.Core.SyncEngine;
 
@@ -54,7 +53,6 @@ public class SyncCoordinator : IDisposable
     private ConnectionState _connectionState = ConnectionState.Initial();
     private Task? _reconnectTask;
     private CancellationTokenSource? _reconnectCts;
-    private ExplorerStatusManager? _explorerStatusManager;
     private readonly SemaphoreSlim _remoteScanGate = new(1, 1);
 
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
@@ -121,7 +119,12 @@ public class SyncCoordinator : IDisposable
             _stateService,
             _explorerItemStateService);
         _placeholderManager = new PlaceholderManager(webDav, _stateService, _pathMapper, loggerFactory.CreateLogger<PlaceholderManager>());
-        _projectionService = new SyncProjectionService(_placeholderManager, _stateService, cloudFileOperations, loggerFactory.CreateLogger<SyncProjectionService>());
+        _projectionService = new SyncProjectionService(
+            _placeholderManager,
+            _stateService,
+            cloudFileOperations,
+            loggerFactory.CreateLogger<SyncProjectionService>(),
+            _explorerItemStateService);
         _hydrationHandler = new HydrationHandler(webDav, _stateService, _pathMapper, _projectionService, loggerFactory.CreateLogger<HydrationHandler>(), _activeCloudRequestTracker);
         _dehydrationHandler = new DehydrationHandler(
             _stateService,
@@ -160,14 +163,6 @@ public class SyncCoordinator : IDisposable
     }
 
     /// <summary>
-    /// Sets the ExplorerStatusManager for visual state updates in Windows Explorer.
-    /// </summary>
-    public void SetExplorerStatusManager(ExplorerStatusManager manager)
-    {
-        _explorerStatusManager = manager;
-    }
-
-    /// <summary>
     /// Register sync root and connect cfapi callbacks.
     /// Called only after readiness gate is fully verified (stale cleanup + connection + listing).
     /// </summary>
@@ -188,10 +183,8 @@ public class SyncCoordinator : IDisposable
         _hydrationHandler.SetConnectionKey(key);
         _dehydrationHandler.SetConnectionKey(key);
 
-        // Initialize connection state and update Explorer visual state
+        // Initialize connection state.
         _connectionState = ConnectionState.Connected();
-        _ = _explorerStatusManager?.SetStateAsync(
-            ExplorerVisualState.Connected, _settings.SyncRootPath, _connector);
 
         CurrentState = SyncState.Syncing;
         StateChanged?.Invoke(SyncState.Syncing);
@@ -258,8 +251,6 @@ public class SyncCoordinator : IDisposable
                 await _reconnectTask;
         }
         catch (OperationCanceledException) { }
-
-        _connector.UpdateSyncProviderStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_DISCONNECTED);
 
         _connector.Disconnect();
 
@@ -399,6 +390,75 @@ public class SyncCoordinator : IDisposable
         _problemService.Resolve(problemId);
     }
 
+    public async Task ReuploadRemoteDeletedLocalChangeAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        if (!File.Exists(localPath) && !Directory.Exists(localPath))
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return;
+        }
+
+        journalRecord ??= CreateJournalRecordFromLocalState(localPath, remotePath, syncItem);
+        ClearRemoteDeletedLocalChangedPending(journalRecord);
+
+        var remote = await _webDav.GetPropertiesAsync(remotePath, ct);
+        var enqueued = EnqueueAction(new ReconcileAction(
+            ReconcileActionType.UploadChanged,
+            localPath,
+            remotePath,
+            journalRecord.FileId,
+            Local: null,
+            Journal: journalRecord,
+            Remote: remote));
+        if (enqueued)
+            _problemService.Resolve(problemId);
+    }
+
+    public Task DeleteLocalRemoteDeletedLocalChangeAsync(
+        long problemId,
+        string localPath,
+        string remotePath,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || string.IsNullOrWhiteSpace(remotePath))
+            return Task.CompletedTask;
+
+        var journalRecord = _journal.GetByLocalPath(localPath) ?? _journal.GetByRemotePath(remotePath);
+        var syncItem = _stateService.GetByLocalPath(localPath) ?? _stateService.GetByRemotePath(remotePath);
+        if (!File.Exists(localPath) && !Directory.Exists(localPath))
+        {
+            DeleteTrackedState(localPath, remotePath, journalRecord, syncItem);
+            _problemService.Resolve(problemId);
+            return Task.CompletedTask;
+        }
+
+        journalRecord ??= CreateJournalRecordFromLocalState(localPath, remotePath, syncItem);
+        ClearRemoteDeletedLocalChangedPending(journalRecord);
+
+        var enqueued = EnqueueAction(new ReconcileAction(
+            ReconcileActionType.DeleteLocal,
+            localPath,
+            remotePath,
+            journalRecord.FileId,
+            Local: null,
+            Journal: journalRecord,
+            Remote: null));
+        if (enqueued)
+            _problemService.Resolve(problemId);
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Records a WebDAV operation failure. When 3 consecutive failures occur,
     /// signals connection loss to cfapi and starts the reconnection loop.
@@ -423,10 +483,6 @@ public class SyncCoordinator : IDisposable
                 FirstOccurredAt = DateTime.UtcNow,
                 LastOccurredAt = DateTime.UtcNow
             });
-
-            // Update Explorer visual state to Disconnected (Layers 1+2+3)
-            _ = _explorerStatusManager?.SetStateAsync(
-                ExplorerVisualState.Disconnected, _settings.SyncRootPath, _connector);
 
             _stateMachine.TransitionTo(MountPhase.ConnectionLost);
 
@@ -472,10 +528,6 @@ public class SyncCoordinator : IDisposable
                     _logger.LogInformation("Connection restored — resuming sync");
 
                     _connectionState = _connectionState.RecordSuccess();
-
-                    // Update Explorer visual state to Connected (Layers 1+2+3)
-                    _ = _explorerStatusManager?.SetStateAsync(
-                        ExplorerVisualState.Connected, _settings.SyncRootPath, _connector);
 
                     _hydrationHandler.SetWebDavReady(true);
                     _placeholderManager.SetWebDavReady(true);
@@ -789,6 +841,12 @@ public class SyncCoordinator : IDisposable
             return false;
         }
 
+        if (action.Type == ReconcileActionType.RemoteDeletedLocalChanged)
+        {
+            ReportRemoteDeletedLocalChanged(action);
+            return false;
+        }
+
         var job = _propagatorQueue.Enqueue(action);
         _logger.LogInformation(
             "Queued reconcile action for propagation: Type={Type} Path={Path} OperationId={OperationId}",
@@ -827,6 +885,80 @@ public class SyncCoordinator : IDisposable
             record.InSync = true;
             _journal.Upsert(record);
         }
+    }
+
+    private void ClearRemoteDeletedLocalChangedPending(SyncJournalRecord record)
+    {
+        if (string.Equals(
+                record.LocalPendingOp,
+                SyncPendingOperations.RemoteDeletedLocalChanged,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            record.LocalPendingOp = null;
+            record.InSync = false;
+            _journal.Upsert(record);
+        }
+    }
+
+    private void ReportRemoteDeletedLocalChanged(ReconcileAction action)
+    {
+        var journalRecord = action.Journal
+            ?? (!string.IsNullOrWhiteSpace(action.FileId) ? _journal.GetByFileId(action.FileId) : null)
+            ?? _journal.GetByLocalPath(action.LocalPath)
+            ?? _journal.GetByRemotePath(action.RemotePath)
+            ?? CreateJournalRecordFromLocalState(action.LocalPath, action.RemotePath, null);
+
+        journalRecord.LocalPendingOp = SyncPendingOperations.RemoteDeletedLocalChanged;
+        journalRecord.InSync = false;
+        _journal.Upsert(journalRecord);
+
+        var syncItem = _stateService.GetByLocalPath(action.LocalPath) ?? _stateService.GetByRemotePath(action.RemotePath);
+        if (syncItem != null)
+        {
+            syncItem.SyncStatus = SyncStatus.RemoteDeletePendingUserChoice;
+            _stateService.Upsert(syncItem);
+        }
+
+        var localizer = AppLocalizer.Instance;
+        var fileName = Path.GetFileName(action.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = Path.GetFileName(action.RemotePath);
+
+        _problemService.Report(new SyncProblem
+        {
+            DedupeKey = SyncProblemKeys.RemoteDeletedLocalChanged(action.LocalPath),
+            ProblemType = SyncProblemType.RemoteDeletedLocalChanged,
+            Severity = SyncProblemSeverity.Warning,
+            Title = localizer.Format("Problem_RemoteDeletedLocalChanged_Title", fileName),
+            Summary = localizer.GetString("Problem_RemoteDeletedLocalChanged_Summary"),
+            Details = localizer.Format("Problem_RemoteDeletedLocalChanged_Detail", action.RemotePath),
+            LocalPath = action.LocalPath,
+            RemotePath = action.RemotePath,
+            FirstOccurredAt = DateTime.UtcNow,
+            LastOccurredAt = DateTime.UtcNow
+        });
+    }
+
+    private static SyncJournalRecord CreateJournalRecordFromLocalState(
+        string localPath,
+        string remotePath,
+        SyncItem? syncItem)
+    {
+        var isDirectory = syncItem?.IsDirectory ?? Directory.Exists(localPath);
+        var fileInfo = !isDirectory && File.Exists(localPath) ? new FileInfo(localPath) : null;
+        return new SyncJournalRecord
+        {
+            FileId = SyncIdentity.RemotePathFallbackId(remotePath),
+            LocalPath = localPath,
+            RemotePath = remotePath,
+            IsDirectory = isDirectory,
+            Size = syncItem?.FileSize ?? fileInfo?.Length ?? 0,
+            ETag = syncItem?.RemoteETag,
+            BaseETag = syncItem?.RemoteETag,
+            MTimeUtc = syncItem?.RemoteLastModified ?? fileInfo?.LastWriteTimeUtc ?? DateTime.UtcNow,
+            Checksum = syncItem?.LocalHash,
+            InSync = false
+        };
     }
 
     private void DeleteTrackedState(
@@ -967,7 +1099,7 @@ public class SyncCoordinator : IDisposable
                     {
                         _logger.LogError(ex, "Propagator job failed: {OperationId} {Type} {Path}", job.OperationId, job.JobType, job.LocalPath);
                         _propagatorQueue.Fail(job.OperationId, ex.Message);
-                        await _explorerItemStateService.SetStateAsync(job.LocalPath, ExplorerItemState.Error, ct);
+                        await _explorerItemStateService.SetStateAsync(job.LocalPath, ExplorerItemState.Clear, ct);
                         RecordConnectionFailure();
 
                         if (!_connectionState.IsConnectionLost)

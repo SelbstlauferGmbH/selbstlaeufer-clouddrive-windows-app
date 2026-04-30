@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\assets\app_icons\selbstlaeufer-cloud-app-icon.ico" Link="Resources\selbstlaeufer-cloud-app-icon.ico" />
+    <Content Include="..\..\assets\app_icons\favicon.ico" Link="Resources\favicon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Resource Include="..\..\assets\app_icons\selbstlaeufer-cloud-app-icon-512px.png" Link="Resources\selbstlaeufer-cloud-app-icon-512px.png" />
     <Resource Include="..\..\assets\app_icons\selbstlaeufer-cloud-app-icon-1024px.png" Link="Resources\selbstlaeufer-cloud-app-icon-1024px.png" />
     <Resource Include="..\..\assets\app_icons\selbstlaeufer-clouddrive-icon-with-text.png" Link="Resources\selbstlaeufer-clouddrive-icon-with-text.png" />

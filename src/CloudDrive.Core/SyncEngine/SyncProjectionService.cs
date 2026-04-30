@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using CloudDrive.Core.Helpers;
+using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging;
 
@@ -17,6 +18,7 @@ public class SyncProjectionService : ISyncProjectionService
     private readonly PlaceholderManager _placeholderManager;
     private readonly ISyncItemStateService _stateService;
     private readonly ICloudFileOperations _cloudFileOperations;
+    private readonly ExplorerItemStateService? _explorerItemStateService;
     private readonly ExplorerWindowRefresher _explorerWindowRefresher;
     private readonly ILogger<SyncProjectionService> _logger;
     private readonly ConcurrentDictionary<string, byte> _pendingInSyncOperations = new(StringComparer.OrdinalIgnoreCase);
@@ -26,11 +28,13 @@ public class SyncProjectionService : ISyncProjectionService
         PlaceholderManager placeholderManager,
         ISyncItemStateService stateService,
         ICloudFileOperations cloudFileOperations,
-        ILogger<SyncProjectionService> logger)
+        ILogger<SyncProjectionService> logger,
+        ExplorerItemStateService? explorerItemStateService = null)
     {
         _placeholderManager = placeholderManager;
         _stateService = stateService;
         _cloudFileOperations = cloudFileOperations;
+        _explorerItemStateService = explorerItemStateService;
         _explorerWindowRefresher = new ExplorerWindowRefresher(logger);
         _logger = logger;
     }
@@ -182,6 +186,7 @@ public class SyncProjectionService : ISyncProjectionService
                             !string.IsNullOrWhiteSpace(trackedItem.RemotePath) &&
                             SuppressAndConvertToPlaceholder(localPath, trackedItem.RemotePath))
                         {
+                            await ClearExplorerItemStateAsync(localPath);
                             _explorerWindowRefresher.NotifyItemChanged(localPath);
 
                             if (!string.IsNullOrEmpty(parentDirectoryPath))
@@ -203,6 +208,7 @@ public class SyncProjectionService : ISyncProjectionService
                     SuppressLocalWatcher(localPath);
                     if (_cloudFileOperations.TrySetInSyncState(localPath, _logger))
                     {
+                        await ClearExplorerItemStateAsync(localPath);
                         _explorerWindowRefresher.NotifyItemChanged(localPath);
 
                         if (!string.IsNullOrEmpty(parentDirectoryPath))
@@ -240,5 +246,10 @@ public class SyncProjectionService : ISyncProjectionService
     {
         SuppressLocalWatcher(localPath);
         return _cloudFileOperations.TryConvertToPlaceholder(localPath, remotePath, _logger);
+    }
+
+    private Task ClearExplorerItemStateAsync(string localPath)
+    {
+        return _explorerItemStateService?.SetStateAsync(localPath, ExplorerItemState.Clear) ?? Task.CompletedTask;
     }
 }

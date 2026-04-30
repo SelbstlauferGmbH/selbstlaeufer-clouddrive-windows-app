@@ -40,13 +40,7 @@ public sealed class WatchdogOfflineGraceSession
             return;
         }
 
-        SyncRootAccountIdResolver.TryResolve(settings, out var accountId);
-
         using var connector = new SyncRootConnector(_loggerFactory.CreateLogger<SyncRootConnector>());
-        var explorerStatusManager = new ExplorerStatusManager(
-            _loggerFactory.CreateLogger<ExplorerStatusManager>(),
-            accountId == null ? null : new SyncRootRegistrar(_loggerFactory.CreateLogger<SyncRootRegistrar>()),
-            accountId);
 
         connector.FetchDataRequested += HandleFetchDataAsync;
         connector.FetchPlaceholdersRequested += HandleFetchPlaceholdersAsync;
@@ -54,10 +48,6 @@ public sealed class WatchdogOfflineGraceSession
         try
         {
             connector.Connect(settings.SyncRootPath);
-            await explorerStatusManager.SetStateAsync(
-                ExplorerVisualState.Disconnected,
-                settings.SyncRootPath,
-                connector);
 
             _logger.LogInformation(
                 "Offline watchdog connected for up to {GraceSeconds}s to keep Explorer responsive",

@@ -9,5 +9,6 @@ public enum SyncStatus
     PendingDownload = 4,
     Error = 5,
     Conflict = 6,
-    RemoteDeletePendingLocalCleanup = 7
+    RemoteDeletePendingLocalCleanup = 7,
+    RemoteDeletePendingUserChoice = 8
 }

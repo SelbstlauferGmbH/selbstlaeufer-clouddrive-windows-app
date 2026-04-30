@@ -66,6 +66,9 @@ Do you want to restart CloudDrive now?</value>
   <data name="Common_Close" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
   <data name="Common_Open" xml:space="preserve">
     <value>Open</value>
   </data>
@@ -215,6 +218,36 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Wizard_Status_Starting" xml:space="preserve">
     <value>Settings saved. Selbstläufer CloudDrive is starting.</value>
+  </data>
+  <data name="RemoteTargetChange_Heading" xml:space="preserve">
+    <value>WebDAV target changed</value>
+  </data>
+  <data name="RemoteTargetChange_Summary" xml:space="preserve">
+    <value>CloudDrive noticed that the WebDAV URL is different from the saved account. Is this still the same remote location with updated credentials, or are you connecting this device to a different remote?</value>
+  </data>
+  <data name="RemoteTargetChange_OldTarget" xml:space="preserve">
+    <value>Saved target</value>
+  </data>
+  <data name="RemoteTargetChange_NewTarget" xml:space="preserve">
+    <value>New target</value>
+  </data>
+  <data name="RemoteTargetChange_Warning" xml:space="preserve">
+    <value>If this is a different remote, CloudDrive will reset local sync data and the journal before the next scan so old placeholders and paths are not matched against the new server.</value>
+  </data>
+  <data name="RemoteTargetChange_KeepButton" xml:space="preserve">
+    <value>Same target, keep data</value>
+  </data>
+  <data name="RemoteTargetChange_ResetButton" xml:space="preserve">
+    <value>New target, reset data</value>
+  </data>
+  <data name="RemoteTargetChange_Status_SaveCancelled" xml:space="preserve">
+    <value>Save cancelled</value>
+  </data>
+  <data name="RemoteTargetChange_Status_ResetUnavailable" xml:space="preserve">
+    <value>Settings saved, but local reset is unavailable.</value>
+  </data>
+  <data name="RemoteTargetChange_Status_Resetting" xml:space="preserve">
+    <value>Settings saved. Resetting local sync data...</value>
   </data>
   <data name="Navigation_Group_Main" xml:space="preserve">
     <value>Main</value>
@@ -954,6 +987,9 @@ Do you want to restart CloudDrive now?</value>
   <data name="SyncStatus_Conflict" xml:space="preserve">
     <value>Conflict</value>
   </data>
+  <data name="SyncStatus_RemoteDeletePendingUserChoice" xml:space="preserve">
+    <value>Needs decision</value>
+  </data>
   <data name="Time_SecondAgo" xml:space="preserve">
     <value>{0} second ago</value>
   </data>
@@ -1001,6 +1037,12 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Problem_Action_KeepRemote" xml:space="preserve">
     <value>Keep remote copy</value>
+  </data>
+  <data name="Problem_Action_ReuploadLocal" xml:space="preserve">
+    <value>Reupload local copy</value>
+  </data>
+  <data name="Problem_Action_DeleteLocal" xml:space="preserve">
+    <value>Delete locally</value>
   </data>
   <data name="Problem_CannotReachServer_Title" xml:space="preserve">
     <value>Cannot reach server</value>
@@ -1068,6 +1110,15 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_RemoteDeleteConfirmation_Detail" xml:space="preserve">
     <value>Remote path: {0}</value>
   </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Title" xml:space="preserve">
+    <value>Server deleted {0}</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Summary" xml:space="preserve">
+    <value>The server copy was deleted, but the local file changed while CloudDrive was offline.</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Detail" xml:space="preserve">
+    <value>Remote path: {0}</value>
+  </data>
   <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
     <value>Failed to delete {0} on the server</value>
   </data>
@@ -1113,8 +1164,29 @@ Do you want to restart CloudDrive now?</value>
   <data name="Problem_Kind_RemoteDeleteConfirmation" xml:space="preserve">
     <value>Delete confirmation</value>
   </data>
+  <data name="Problem_Kind_RemoteDeletedLocalChanged" xml:space="preserve">
+    <value>Remote deletion</value>
+  </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_One" xml:space="preserve">
+    <value>Server deleted {0}</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_Many" xml:space="preserve">
+    <value>Server deleted {0} local items</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_One" xml:space="preserve">
+    <value>The server copy was removed, but your local copy has changes. Choose what CloudDrive should do.</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_Many" xml:space="preserve">
+    <value>The server removed these items while local copies have changes. Choose one action for all of them.</value>
+  </data>
+  <data name="RemoteDeleteDecision_DecideLater" xml:space="preserve">
+    <value>Decide later</value>
+  </data>
+  <data name="RemoteDeleteDecision_RemotePath" xml:space="preserve">
+    <value>Remote: {0}</value>
   </data>
   <data name="Problem_Occurrence_First" xml:space="preserve">
     <value>First occurrence</value>
@@ -1216,6 +1288,26 @@ Saved account settings, stored password, app preferences, local metadata, and lo
   </data>
   <data name="Reset_RestartRequired_Message" xml:space="preserve">
     <value>CloudDrive needs to restart Windows to finish cleaning up the sync folder.</value>
+  </data>
+  <data name="Startup_StaleLocalState_Title" xml:space="preserve">
+    <value>Repair local sync state</value>
+  </data>
+  <data name="Startup_StaleLocalState_Message" xml:space="preserve">
+    <value>CloudDrive found stale local sync operations from an earlier run ({0} item(s)). This can block folder navigation or keep retrying failed moves.
+
+Cleaning removes the local sync folder and local metadata at:
+{1}
+
+Your WebDAV files, saved account settings, and stored password stay in place.
+
+Choose Yes to clean and continue.
+Choose No to start without cleaning.</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Title" xml:space="preserve">
+    <value>Cleanup failed</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Message" xml:space="preserve">
+    <value>CloudDrive could not clean the stale local sync state. The app will now exit so the existing files stay untouched.</value>
   </data>
   <data name="Install_CleanupWarning_Title" xml:space="preserve">
     <value>Clean existing sync folder</value>

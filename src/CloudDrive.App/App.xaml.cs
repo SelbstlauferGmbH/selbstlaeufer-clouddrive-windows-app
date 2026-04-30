@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows.Threading;
 using CloudDrive.App.Services;
 using CloudDrive.App.Tray;
 using CloudDrive.App.ViewModels;
@@ -37,6 +38,11 @@ public partial class App : System.Windows.Application
     private Stopwatch? _serverWaitStopwatch;
     private Stopwatch? _disconnectionStopwatch;
     private readonly DateTime _appStartedAt = DateTime.Now;
+    private readonly List<SyncProblem> _remoteDeleteDecisionQueue = [];
+    private readonly HashSet<string> _remoteDeleteDecisionQueuedKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _remoteDeleteDecisionPromptedKeys = new(StringComparer.OrdinalIgnoreCase);
+    private DispatcherTimer? _remoteDeleteDecisionTimer;
+    private bool _remoteDeleteDecisionDialogOpen;
     private int _fatalExceptionHandled;
 
     public App(AppLaunchOptions? launchOptions = null)
@@ -160,6 +166,15 @@ public partial class App : System.Windows.Application
         }
 
         settings = AppSettings.Load();
+        localizer.Initialize(settings.Language);
+
+        if (!await OfferStartupLocalStateCleanupAsync(settings))
+        {
+            Shutdown();
+            return;
+        }
+
+        settings = AppSettings.Load();
         RegisterExplorerIntegration(settings);
         localizer.Initialize(settings.Language);
         ThemeManager.ApplyTheme(settings.ThemeMode);
@@ -268,6 +283,10 @@ public partial class App : System.Windows.Application
                     localizer.Format("Tray_Balloon_CannotReachServer", url),
                     System.Windows.Forms.ToolTipIcon.Warning));
             };
+            svc.ProblemReported += problem =>
+            {
+                Dispatcher.Invoke(() => QueueRemoteDeleteDecision(problem));
+            };
 
             // Mount lifecycle phase notifications
             WireMountPhaseNotifications(svc);
@@ -288,9 +307,83 @@ public partial class App : System.Windows.Application
             return true;
 
         using var loggerFactory = LoggerFactory.Create(_ => { });
-        var wizard = new ConfigurationWizardWindow(new ConfigurationWizardViewModel(loggerFactory));
+        var wizard = new ConfigurationWizardWindow(new ConfigurationWizardViewModel(
+            loggerFactory,
+            remoteTargetResetCallback: CleanupLocalStateForRemoteTargetChangeBeforeStartupAsync));
         return wizard.ShowDialog() == true &&
                AppSettings.Load().HasCompleteAccountConfiguration(CredentialManager.HasPassword());
+    }
+
+    private async Task<bool> OfferStartupLocalStateCleanupAsync(AppSettings settings)
+    {
+        if (!settings.HasCompleteAccountConfiguration(CredentialManager.HasPassword()))
+            return true;
+
+        LocalSyncStateHealthCheckResult healthCheck;
+        try
+        {
+            healthCheck = LocalSyncStateHealthChecker.Inspect(settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Startup local state health check failed");
+            return true;
+        }
+
+        if (!healthCheck.HasSuspiciousState)
+            return true;
+
+        Log.Warning(
+            "Startup local state health check found suspicious sync operations: Suspicious={SuspiciousCount} Active={ActiveCount} ExampleLocalPath={ExampleLocalPath} ExampleRemotePath={ExampleRemotePath} Reason={Reason}",
+            healthCheck.SuspiciousOperationCount,
+            healthCheck.ActiveOperationCount,
+            healthCheck.ExampleLocalPath,
+            healthCheck.ExampleRemotePath,
+            healthCheck.Reason);
+
+        var localizer = AppLocalizer.Instance;
+        var result = System.Windows.MessageBox.Show(
+            localizer.Format(
+                "Startup_StaleLocalState_Message",
+                healthCheck.SuspiciousOperationCount,
+                settings.SyncRootPath),
+            localizer.GetString("Startup_StaleLocalState_Title"),
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.Yes);
+
+        if (result != System.Windows.MessageBoxResult.Yes)
+        {
+            Log.Warning("Startup local state cleanup declined");
+            return true;
+        }
+
+        try
+        {
+            var cleanupService = new LocalStateCleanupService();
+            var cleanupResult = await cleanupService.CleanupAsync(
+                settings,
+                new LocalStateCleanupOptions(
+                    ClearSavedConfiguration: false,
+                    ClearCredentials: false));
+
+            _ = PromptForRebootIfRequired(cleanupResult);
+            if (cleanupResult.RequiresReboot)
+                return false;
+
+            Log.Information("Startup local state cleanup completed");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Startup local state cleanup failed");
+            System.Windows.MessageBox.Show(
+                localizer.GetString("Startup_StaleLocalState_CleanupFailed_Message"),
+                localizer.GetString("Startup_StaleLocalState_CleanupFailed_Title"),
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+            return false;
+        }
     }
 
     protected override async void OnExit(System.Windows.ExitEventArgs e)
@@ -444,6 +537,8 @@ public partial class App : System.Windows.Application
             _appStartedAt,
             ConfirmRemoteDeleteAsync,
             KeepRemoteCopyAsync,
+            ReuploadRemoteDeletedLocalChangeAsync,
+            DeleteLocalRemoteDeletedLocalChangeAsync,
             updateService.ApplyUpdateAndRestart);
     }
 
@@ -463,6 +558,202 @@ public partial class App : System.Windows.Application
             return;
 
         await coordinator.KeepRemoteCopyAsync(problemId, localPath, remotePath);
+    }
+
+    private async Task ReuploadRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.ReuploadRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+    }
+
+    private async Task DeleteLocalRemoteDeletedLocalChangeAsync(long problemId, string localPath, string remotePath)
+    {
+        var coordinator = GetSyncService()?.Coordinator;
+        if (coordinator == null)
+            return;
+
+        await coordinator.DeleteLocalRemoteDeletedLocalChangeAsync(problemId, localPath, remotePath);
+    }
+
+    private void QueueRemoteDeleteDecision(SyncProblem problem)
+    {
+        if (problem.ProblemType != SyncProblemType.RemoteDeletedLocalChanged ||
+            string.IsNullOrWhiteSpace(problem.LocalPath) ||
+            string.IsNullOrWhiteSpace(problem.RemotePath))
+        {
+            return;
+        }
+
+        var key = GetRemoteDeleteDecisionKey(problem);
+        if (string.IsNullOrWhiteSpace(key) ||
+            _remoteDeleteDecisionPromptedKeys.Contains(key) ||
+            !_remoteDeleteDecisionQueuedKeys.Add(key))
+        {
+            return;
+        }
+
+        _remoteDeleteDecisionQueue.Add(problem);
+        _remoteDeleteDecisionTimer ??= CreateRemoteDeleteDecisionTimer();
+        _remoteDeleteDecisionTimer.Stop();
+        _remoteDeleteDecisionTimer.Start();
+    }
+
+    private DispatcherTimer CreateRemoteDeleteDecisionTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
+        timer.Tick += RemoteDeleteDecisionTimer_Tick;
+        return timer;
+    }
+
+    private async void RemoteDeleteDecisionTimer_Tick(object? sender, EventArgs e)
+    {
+        _remoteDeleteDecisionTimer?.Stop();
+        await ShowRemoteDeleteDecisionPromptAsync();
+    }
+
+    private async Task ShowRemoteDeleteDecisionPromptAsync()
+    {
+        if (_remoteDeleteDecisionDialogOpen)
+            return;
+
+        var problems = _remoteDeleteDecisionQueue.ToList();
+        _remoteDeleteDecisionQueue.Clear();
+        _remoteDeleteDecisionQueuedKeys.Clear();
+
+        var items = BuildRemoteDeleteDecisionItems(problems);
+        if (items.Count == 0)
+            return;
+
+        foreach (var problem in problems)
+        {
+            var key = GetRemoteDeleteDecisionKey(problem);
+            if (!string.IsNullOrWhiteSpace(key))
+                _remoteDeleteDecisionPromptedKeys.Add(key);
+        }
+
+        _remoteDeleteDecisionDialogOpen = true;
+        try
+        {
+            var owner = GetModalOwner();
+            var dialog = new RemoteDeleteDecisionWindow(items);
+            if (owner != null)
+            {
+                dialog.Owner = owner;
+                dialog.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                dialog.Topmost = true;
+                dialog.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+            }
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (dialog.Decision == RemoteDeleteDecision.Reupload)
+                    await ReuploadRemoteDeletedLocalChangesAsync(items);
+                else if (dialog.Decision == RemoteDeleteDecision.DeleteLocal)
+                    await DeleteLocalRemoteDeletedLocalChangesAsync(items);
+            }
+        }
+        finally
+        {
+            _remoteDeleteDecisionDialogOpen = false;
+            if (_remoteDeleteDecisionQueue.Count > 0)
+            {
+                _remoteDeleteDecisionTimer?.Stop();
+                _remoteDeleteDecisionTimer?.Start();
+            }
+        }
+    }
+
+    private IReadOnlyList<RemoteDeleteDecisionItem> BuildRemoteDeleteDecisionItems(IReadOnlyList<SyncProblem> problems)
+    {
+        var settings = AppSettings.Load();
+        var localizer = AppLocalizer.Instance;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<RemoteDeleteDecisionItem>();
+
+        foreach (var problem in problems)
+        {
+            if (string.IsNullOrWhiteSpace(problem.LocalPath) || string.IsNullOrWhiteSpace(problem.RemotePath))
+                continue;
+
+            var key = GetRemoteDeleteDecisionKey(problem);
+            if (string.IsNullOrWhiteSpace(key) ||
+                _remoteDeleteDecisionPromptedKeys.Contains(key) ||
+                !seen.Add(key))
+            {
+                continue;
+            }
+
+            var displayName = Path.GetFileName(problem.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(displayName))
+                displayName = problem.LocalPath;
+
+            items.Add(new RemoteDeleteDecisionItem
+            {
+                ProblemId = problem.Id,
+                LocalPath = problem.LocalPath,
+                RemotePath = problem.RemotePath,
+                DisplayName = displayName,
+                Location = GetRemoteDeleteDecisionLocation(settings.SyncRootPath, problem.LocalPath),
+                RemotePathDisplay = localizer.Format("RemoteDeleteDecision_RemotePath", problem.RemotePath)
+            });
+        }
+
+        return items;
+    }
+
+    private async Task ReuploadRemoteDeletedLocalChangesAsync(IReadOnlyList<RemoteDeleteDecisionItem> items)
+    {
+        foreach (var item in items)
+            await ReuploadRemoteDeletedLocalChangeAsync(item.ProblemId, item.LocalPath, item.RemotePath);
+    }
+
+    private async Task DeleteLocalRemoteDeletedLocalChangesAsync(IReadOnlyList<RemoteDeleteDecisionItem> items)
+    {
+        foreach (var item in items)
+            await DeleteLocalRemoteDeletedLocalChangeAsync(item.ProblemId, item.LocalPath, item.RemotePath);
+    }
+
+    private System.Windows.Window? GetModalOwner()
+    {
+        if (_settingsWindow?.IsVisible == true)
+            return _settingsWindow;
+
+        if (_activityPanel?.IsVisible == true)
+            return _activityPanel;
+
+        return null;
+    }
+
+    private static string? GetRemoteDeleteDecisionKey(SyncProblem problem)
+    {
+        if (!string.IsNullOrWhiteSpace(problem.DedupeKey))
+            return problem.DedupeKey;
+
+        return !string.IsNullOrWhiteSpace(problem.LocalPath)
+            ? SyncProblemKeys.RemoteDeletedLocalChanged(problem.LocalPath)
+            : null;
+    }
+
+    private static string GetRemoteDeleteDecisionLocation(string syncRootPath, string localPath)
+    {
+        try
+        {
+            var relative = Path.GetRelativePath(syncRootPath, localPath);
+            if (!relative.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relative))
+                return relative;
+        }
+        catch
+        {
+            // Fall back to the full path when the sync root and item cannot be relativized.
+        }
+
+        return localPath;
     }
 
     private async Task EnsureWatchdogScheduledTaskAsync()
@@ -560,7 +851,8 @@ public partial class App : System.Windows.Application
                 loggerFactory,
                 CreateDashboardContext(),
                 resetCallback: ResetCloudDriveLocalDataAsync,
-                resetConfigurationCallback: ResetCloudDriveConfigurationAndLogsAsync);
+                resetConfigurationCallback: ResetCloudDriveConfigurationAndLogsAsync,
+                remoteTargetResetCallback: ResetCloudDriveLocalDataForRemoteTargetChangeAsync);
             _settingsWindow = new SettingsWindow(vm);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
@@ -689,15 +981,43 @@ public partial class App : System.Windows.Application
     private static extern uint SetErrorMode(uint uMode);
 
     private Task ResetCloudDriveLocalDataAsync() =>
-        ResetCloudDriveWithSharedCleanupAsync(clearSavedConfiguration: false, clearLogs: false);
+        ResetCloudDriveWithSharedCleanupAsync(
+            AppSettings.Load(),
+            clearSavedConfiguration: false,
+            clearLogs: false);
 
     private Task ResetCloudDriveConfigurationAndLogsAsync() =>
-        ResetCloudDriveWithSharedCleanupAsync(clearSavedConfiguration: true, clearLogs: true);
+        ResetCloudDriveWithSharedCleanupAsync(
+            AppSettings.Load(),
+            clearSavedConfiguration: true,
+            clearLogs: true);
 
-    private async Task ResetCloudDriveWithSharedCleanupAsync(bool clearSavedConfiguration, bool clearLogs)
+    private Task ResetCloudDriveLocalDataForRemoteTargetChangeAsync(AppSettings previousSettings) =>
+        ResetCloudDriveWithSharedCleanupAsync(
+            previousSettings,
+            clearSavedConfiguration: false,
+            clearLogs: false,
+            restartAfterCleanup: true);
+
+    private async Task CleanupLocalStateForRemoteTargetChangeBeforeStartupAsync(AppSettings previousSettings)
     {
-        var settings = AppSettings.Load();
+        var cleanupService = new LocalStateCleanupService();
+        var cleanupResult = await cleanupService.CleanupAsync(
+            previousSettings,
+            new LocalStateCleanupOptions(
+                ClearSavedConfiguration: false,
+                ClearCredentials: false));
 
+        if (PromptForRebootIfRequired(cleanupResult))
+            Shutdown();
+    }
+
+    private async Task ResetCloudDriveWithSharedCleanupAsync(
+        AppSettings settings,
+        bool clearSavedConfiguration,
+        bool clearLogs,
+        bool restartAfterCleanup = false)
+    {
         if (_host != null)
         {
             await _host.StopAsync(TimeSpan.FromSeconds(10));
@@ -712,22 +1032,7 @@ public partial class App : System.Windows.Application
                 ClearSavedConfiguration: clearSavedConfiguration,
                 ClearCredentials: clearSavedConfiguration));
 
-        if (cleanupResult.RequiresReboot)
-        {
-            Log.Warning("Reset: Sync root folder could not be deleted - reboot may be required");
-
-            var rebootResult = System.Windows.MessageBox.Show(
-                AppLocalizer.Instance.GetString("Reset_RestartRequired_Message"),
-                AppLocalizer.Instance.GetString("Reset_RestartRequired_Title"),
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Information,
-                System.Windows.MessageBoxResult.No);
-
-            if (rebootResult == System.Windows.MessageBoxResult.Yes)
-            {
-                Process.Start("shutdown", "/r /t 5 /c \"CloudDrive reset: restarting to complete cleanup\"");
-            }
-        }
+        var rebootRequested = PromptForRebootIfRequired(cleanupResult);
 
         if (clearLogs)
         {
@@ -747,8 +1052,32 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (restartAfterCleanup && !rebootRequested)
+            RestartApplication();
+
         Log.CloseAndFlush();
         Shutdown();
+    }
+
+    private static bool PromptForRebootIfRequired(LocalStateCleanupResult cleanupResult)
+    {
+        if (!cleanupResult.RequiresReboot)
+            return false;
+
+        Log.Warning("Reset: Sync root folder could not be deleted - reboot may be required");
+
+        var rebootResult = System.Windows.MessageBox.Show(
+            AppLocalizer.Instance.GetString("Reset_RestartRequired_Message"),
+            AppLocalizer.Instance.GetString("Reset_RestartRequired_Title"),
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information,
+            System.Windows.MessageBoxResult.No);
+
+        if (rebootResult != System.Windows.MessageBoxResult.Yes)
+            return false;
+
+        Process.Start("shutdown", "/r /t 5 /c \"CloudDrive reset: restarting to complete cleanup\"");
+        return true;
     }
 
     private async Task ResetCloudDriveAsync(bool clearSavedConfiguration, bool clearLogs)

@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Vanara.PInvoke;
@@ -18,10 +17,10 @@ public class SyncRootRegistrar
     private const string DesktopNamespaceKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace";
     private const string ClassesClsidKeyPath = @"Software\Classes\CLSID";
     private const string Wow6432ClassesClsidKeyPath = @"Software\Classes\WOW6432Node\CLSID";
+    public const string NavigationPaneIconFileName = "favicon.ico";
+    public const string FallbackNavigationPaneIconResource = @"%SystemRoot%\system32\imageres.dll,-1043";
 
     private readonly ILogger<SyncRootRegistrar> _logger;
-    private DateTime _lastIconRegistration = DateTime.MinValue;
-    private static readonly TimeSpan IconRegistrationDebounce = TimeSpan.FromSeconds(5);
 
     public SyncRootRegistrar(ILogger<SyncRootRegistrar> logger)
     {
@@ -33,13 +32,35 @@ public class SyncRootRegistrar
         return $"{ProviderId}!{Environment.UserName}!{accountId}";
     }
 
-    public async Task RegisterAsync(string syncRootPath, string accountId)
+    public static string GetNavigationPaneIconResource(string? iconPath = null)
     {
+        var path = iconPath;
+        if (string.IsNullOrWhiteSpace(path))
+            path = Path.Combine(AppContext.BaseDirectory, "Resources", NavigationPaneIconFileName);
+
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            return $"\"{path}\",0";
+
+        path = Environment.ProcessPath;
+
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
+            ? $"\"{path}\",0"
+            : FallbackNavigationPaneIconResource;
+    }
+
+    public async Task RegisterAsync(string syncRootPath, string accountId, string? iconResource = null)
+    {
+        var navigationPaneIconResource = string.IsNullOrWhiteSpace(iconResource)
+            ? GetNavigationPaneIconResource()
+            : iconResource;
         var syncRootId = GetSyncRootId(accountId);
         var existingRegistration = GetCurrentSyncRoot(syncRootId);
 
         // If already registered with the correct metadata, skip re-registration.
-        if (existingRegistration != null && !NeedsRegistrationRefresh(existingRegistration, syncRootPath))
+        if (existingRegistration != null && !NeedsRegistrationRefresh(
+                existingRegistration,
+                syncRootPath,
+                navigationPaneIconResource))
         {
             _logger.LogInformation("Sync root already registered: {SyncRootId} - skipping registration", syncRootId);
             return;
@@ -72,7 +93,7 @@ public class SyncRootRegistrar
             Id = syncRootId,
             Path = storageFolder,
             DisplayNameResource = ProviderDisplayName,
-            IconResource = "%SystemRoot%\\system32\\imageres.dll,-1043",
+            IconResource = navigationPaneIconResource,
             Version = "1.0",
             RecycleBinUri = null,
             HydrationPolicy = StorageProviderHydrationPolicy.Full,
@@ -266,58 +287,6 @@ public class SyncRootRegistrar
 
         _logger.LogError("Failed to unregister stale sync root after 3 attempts: {SyncRootId}", syncRootId);
         return false;
-    }
-
-    /// <summary>
-    /// Re-registers the sync root with a different icon resource (Layer 3 — experimental).
-    /// Debounced to at most once per 5 seconds to avoid shell cache thrashing.
-    /// </summary>
-    public async Task ReRegisterWithIconAsync(string syncRootPath, string accountId, string iconResource)
-    {
-        if (DateTime.UtcNow - _lastIconRegistration < IconRegistrationDebounce)
-        {
-            _logger.LogDebug("ReRegisterWithIconAsync debounced — skipping");
-            return;
-        }
-
-        var syncRootId = GetSyncRootId(accountId);
-        if (!IsRegistered(syncRootId))
-        {
-            _logger.LogDebug("ReRegisterWithIconAsync skipped — sync root not registered");
-            return;
-        }
-
-        try
-        {
-            var storageFolder = await StorageFolder.GetFolderFromPathAsync(syncRootPath);
-
-            var syncRootInfo = new StorageProviderSyncRootInfo
-            {
-                Id = syncRootId,
-                Path = storageFolder,
-                DisplayNameResource = ProviderDisplayName,
-                IconResource = iconResource,
-                Version = "1.0",
-                RecycleBinUri = null,
-                HydrationPolicy = StorageProviderHydrationPolicy.Full,
-                HydrationPolicyModifier = StorageProviderHydrationPolicyModifier.None,
-                PopulationPolicy = StorageProviderPopulationPolicy.Full,
-                InSyncPolicy = StorageProviderInSyncPolicy.FileCreationTime
-                             | StorageProviderInSyncPolicy.DirectoryCreationTime,
-                HardlinkPolicy = StorageProviderHardlinkPolicy.None,
-                ShowSiblingsAsGroup = false,
-                Context = CryptographicBuffer.ConvertStringToBinary(syncRootId, BinaryStringEncoding.Utf8),
-            };
-            AddItemPropertyDefinitions(syncRootInfo);
-
-            StorageProviderSyncRootManager.Register(syncRootInfo);
-            _lastIconRegistration = DateTime.UtcNow;
-            _logger.LogInformation("Re-registered sync root with icon: {Icon}", iconResource);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "ReRegisterWithIconAsync failed for {SyncRootId}", syncRootId);
-        }
     }
 
     internal static bool ShouldCleanupShellNamespaceRegistration(
@@ -602,7 +571,10 @@ public class SyncRootRegistrar
         }
     }
 
-    private static bool NeedsRegistrationRefresh(StorageProviderSyncRootInfo existingRegistration, string syncRootPath)
+    private static bool NeedsRegistrationRefresh(
+        StorageProviderSyncRootInfo existingRegistration,
+        string syncRootPath,
+        string expectedIconResource)
     {
         var normalizedExistingPath = NormalizePath(existingRegistration.Path?.Path);
         var normalizedRequestedPath = NormalizePath(syncRootPath);
@@ -618,14 +590,12 @@ public class SyncRootRegistrar
             return true;
         }
 
+        if (NeedsIconResourceRefresh(existingRegistration.IconResource, expectedIconResource))
+            return true;
+
         var expectedPropertyIds = new HashSet<int>
         {
-            ExplorerItemStateService.SyncedPropertyId,
-            ExplorerItemStateService.SyncingPropertyId,
-            ExplorerItemStateService.ConflictPropertyId,
-            ExplorerItemStateService.ErrorPropertyId,
-            ExplorerItemStateService.PinnedPropertyId,
-            ExplorerItemStateService.UnpinnedPropertyId
+            ExplorerItemStateService.ConflictPropertyId
         };
         var registeredPropertyIds = existingRegistration.StorageProviderItemPropertyDefinitions
             .Select(definition => definition.Id)
@@ -633,37 +603,35 @@ public class SyncRootRegistrar
         return !expectedPropertyIds.IsSubsetOf(registeredPropertyIds);
     }
 
+    internal static bool NeedsIconResourceRefresh(string? registeredIconResource, string expectedIconResource)
+    {
+        return !string.Equals(
+            NormalizeIconResource(registeredIconResource),
+            NormalizeIconResource(expectedIconResource),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizeIconResource(string? iconResource)
+    {
+        if (string.IsNullOrWhiteSpace(iconResource))
+            return null;
+
+        var trimmed = iconResource.Trim();
+        if (!trimmed.StartsWith('"'))
+            return trimmed;
+
+        var endQuoteIndex = trimmed.IndexOf('"', 1);
+        return endQuoteIndex <= 1
+            ? trimmed
+            : trimmed[1..endQuoteIndex] + trimmed[(endQuoteIndex + 1)..].Trim();
+    }
+
     private static void AddItemPropertyDefinitions(StorageProviderSyncRootInfo syncRootInfo)
     {
         syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
         {
-            Id = ExplorerItemStateService.SyncedPropertyId,
-            DisplayNameResource = "Synced"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.SyncingPropertyId,
-            DisplayNameResource = "Syncing"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
             Id = ExplorerItemStateService.ConflictPropertyId,
             DisplayNameResource = "Conflict"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.ErrorPropertyId,
-            DisplayNameResource = "Error"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.PinnedPropertyId,
-            DisplayNameResource = "Pinned"
-        });
-        syncRootInfo.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition
-        {
-            Id = ExplorerItemStateService.UnpinnedPropertyId,
-            DisplayNameResource = "Online-only"
         });
     }
 

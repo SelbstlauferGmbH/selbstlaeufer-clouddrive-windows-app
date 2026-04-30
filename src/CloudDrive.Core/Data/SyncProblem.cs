@@ -31,7 +31,8 @@ public enum SyncProblemType
     DiskFull = 7,
     PermissionDenied = 8,
     RemoteLock = 9,
-    RemoteDeleteConfirmation = 10
+    RemoteDeleteConfirmation = 10,
+    RemoteDeletedLocalChanged = 11
 }
 
 public enum SyncProblemSeverity

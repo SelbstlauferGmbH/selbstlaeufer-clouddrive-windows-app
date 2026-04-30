@@ -66,6 +66,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Common_Close" xml:space="preserve">
     <value>Schließen</value>
   </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>Abbrechen</value>
+  </data>
   <data name="Common_Open" xml:space="preserve">
     <value>Öffnen</value>
   </data>
@@ -215,6 +218,36 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Wizard_Status_Starting" xml:space="preserve">
     <value>Einstellungen gespeichert. Selbstläufer CloudDrive wird gestartet.</value>
+  </data>
+  <data name="RemoteTargetChange_Heading" xml:space="preserve">
+    <value>WebDAV-Ziel geaendert</value>
+  </data>
+  <data name="RemoteTargetChange_Summary" xml:space="preserve">
+    <value>CloudDrive hat erkannt, dass die WebDAV-URL von der gespeicherten Adresse abweicht. Ist dies weiterhin dasselbe Ziel mit neuen Zugangsdaten, oder verbinden Sie dieses Geraet mit einem anderen Ziel?</value>
+  </data>
+  <data name="RemoteTargetChange_OldTarget" xml:space="preserve">
+    <value>Gespeichertes Ziel</value>
+  </data>
+  <data name="RemoteTargetChange_NewTarget" xml:space="preserve">
+    <value>Neues Ziel</value>
+  </data>
+  <data name="RemoteTargetChange_Warning" xml:space="preserve">
+    <value>Bei einem anderen Ziel setzt CloudDrive die lokalen Synchronisierungsdaten und das Journal zurueck, bevor der naechste Scan startet. So werden alte Platzhalter und Pfade nicht mit dem neuen Server abgeglichen.</value>
+  </data>
+  <data name="RemoteTargetChange_KeepButton" xml:space="preserve">
+    <value>Gleiches Ziel, Daten behalten</value>
+  </data>
+  <data name="RemoteTargetChange_ResetButton" xml:space="preserve">
+    <value>Anderes Ziel, Daten zuruecksetzen</value>
+  </data>
+  <data name="RemoteTargetChange_Status_SaveCancelled" xml:space="preserve">
+    <value>Speichern abgebrochen</value>
+  </data>
+  <data name="RemoteTargetChange_Status_ResetUnavailable" xml:space="preserve">
+    <value>Einstellungen gespeichert, aber lokales Zuruecksetzen ist nicht verfuegbar.</value>
+  </data>
+  <data name="RemoteTargetChange_Status_Resetting" xml:space="preserve">
+    <value>Einstellungen gespeichert. Lokale Synchronisierungsdaten werden zurueckgesetzt...</value>
   </data>
   <data name="Navigation_Group_Main" xml:space="preserve">
     <value>Hauptbereiche</value>
@@ -954,6 +987,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="SyncStatus_Conflict" xml:space="preserve">
     <value>Konflikt</value>
   </data>
+  <data name="SyncStatus_RemoteDeletePendingUserChoice" xml:space="preserve">
+    <value>Entscheidung noetig</value>
+  </data>
   <data name="Time_SecondAgo" xml:space="preserve">
     <value>vor {0} Sekunde</value>
   </data>
@@ -1001,6 +1037,12 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Problem_Action_KeepRemote" xml:space="preserve">
     <value>Remote-Kopie behalten</value>
+  </data>
+  <data name="Problem_Action_ReuploadLocal" xml:space="preserve">
+    <value>Lokale Kopie erneut hochladen</value>
+  </data>
+  <data name="Problem_Action_DeleteLocal" xml:space="preserve">
+    <value>Lokal loeschen</value>
   </data>
   <data name="Problem_CannotReachServer_Title" xml:space="preserve">
     <value>Server nicht erreichbar</value>
@@ -1068,6 +1110,15 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_RemoteDeleteConfirmation_Detail" xml:space="preserve">
     <value>Remote-Pfad: {0}</value>
   </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Title" xml:space="preserve">
+    <value>Server hat {0} geloescht</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Summary" xml:space="preserve">
+    <value>Die Serverkopie wurde geloescht, aber die lokale Datei wurde geaendert, waehrend CloudDrive offline war.</value>
+  </data>
+  <data name="Problem_RemoteDeletedLocalChanged_Detail" xml:space="preserve">
+    <value>Remote-Pfad: {0}</value>
+  </data>
   <data name="Problem_Upload_DeleteSummary" xml:space="preserve">
     <value>{0} konnte auf dem Server nicht gelöscht werden</value>
   </data>
@@ -1113,8 +1164,29 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Problem_Kind_RemoteDeleteConfirmation" xml:space="preserve">
     <value>Löschbestätigung</value>
   </data>
+  <data name="Problem_Kind_RemoteDeletedLocalChanged" xml:space="preserve">
+    <value>Remote-Loeschung</value>
+  </data>
   <data name="Problem_Kind_Generic" xml:space="preserve">
     <value>Problem</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_One" xml:space="preserve">
+    <value>Server hat {0} geloescht</value>
+  </data>
+  <data name="RemoteDeleteDecision_Heading_Many" xml:space="preserve">
+    <value>Server hat {0} lokale Elemente geloescht</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_One" xml:space="preserve">
+    <value>Die Serverkopie wurde entfernt, aber Ihre lokale Kopie hat Aenderungen. Waehlen Sie, was CloudDrive tun soll.</value>
+  </data>
+  <data name="RemoteDeleteDecision_Summary_Many" xml:space="preserve">
+    <value>Der Server hat diese Elemente entfernt, waehrend lokale Kopien Aenderungen haben. Waehlen Sie eine Aktion fuer alle.</value>
+  </data>
+  <data name="RemoteDeleteDecision_DecideLater" xml:space="preserve">
+    <value>Spaeter entscheiden</value>
+  </data>
+  <data name="RemoteDeleteDecision_RemotePath" xml:space="preserve">
+    <value>Remote: {0}</value>
   </data>
   <data name="Problem_Occurrence_First" xml:space="preserve">
     <value>Erstmalig aufgetreten</value>
@@ -1216,6 +1288,26 @@ Gespeicherte Kontoeinstellungen, das gespeicherte Passwort, App-Einstellungen, l
   </data>
   <data name="Reset_RestartRequired_Message" xml:space="preserve">
     <value>CloudDrive muss Windows neu starten, um die Bereinigung des Synchronisierungsordners abzuschließen.</value>
+  </data>
+  <data name="Startup_StaleLocalState_Title" xml:space="preserve">
+    <value>Lokalen Sync-Status reparieren</value>
+  </data>
+  <data name="Startup_StaleLocalState_Message" xml:space="preserve">
+    <value>CloudDrive hat veraltete lokale Sync-Vorgaenge aus einem frueheren Lauf gefunden ({0} Element(e)). Das kann die Ordnernavigation blockieren oder fehlgeschlagene Verschiebungen wiederholen.
+
+Die Bereinigung entfernt den lokalen Synchronisierungsordner und lokale Metadaten unter:
+{1}
+
+Ihre WebDAV-Dateien, gespeicherten Kontoeinstellungen und das gespeicherte Passwort bleiben erhalten.
+
+Waehlen Sie Ja, um zu bereinigen und fortzufahren.
+Waehlen Sie Nein, um ohne Bereinigung zu starten.</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Title" xml:space="preserve">
+    <value>Bereinigung fehlgeschlagen</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Message" xml:space="preserve">
+    <value>CloudDrive konnte den veralteten lokalen Sync-Status nicht bereinigen. Die App wird jetzt beendet, damit vorhandene Dateien unveraendert bleiben.</value>
   </data>
   <data name="Install_CleanupWarning_Title" xml:space="preserve">
     <value>Vorhandenen Sync-Ordner bereinigen</value>

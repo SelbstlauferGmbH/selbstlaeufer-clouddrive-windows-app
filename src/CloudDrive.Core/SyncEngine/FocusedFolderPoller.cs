@@ -68,6 +68,14 @@ public sealed class FocusedFolderPoller
                 continue;
             }
 
+            if (action.Type == ReconcileActionType.RemoteDeletedLocalChanged)
+            {
+                _logger.LogDebug(
+                    "Focused folder poll skipped remote-deleted local change decision action: {LocalPath}",
+                    action.LocalPath);
+                continue;
+            }
+
             _queue.Enqueue(action);
             enqueued++;
         }

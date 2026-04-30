@@ -95,7 +95,7 @@ public sealed class Propagator
             await EnsurePlaceholderMetadataAsync(action.LocalPath, directoryMetadata, ct);
             await RequireInSyncAsync(action.LocalPath, ct);
             UpsertJournal(action with { FileId = directoryMetadata.FileId }, action.Remote, isDirectory: true, size: 0, checksum: null);
-            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
+            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
             _logger.LogInformation(
                 "Propagated local directory upload: {LocalPath} -> {RemotePath}",
                 action.LocalPath,
@@ -170,7 +170,7 @@ public sealed class Propagator
         await EnsureUploadPlaceholderMetadataAsync(action.LocalPath, metadata, ct);
         await RequireUploadInSyncAsync(action.LocalPath, ct);
         UpsertJournal(action with { FileId = metadata.FileId }, uploadedRemote, isDirectory: false, uploadedRemoteSize, checksum, uploadedRemoteEtag, uploadedRemoteMTime);
-        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
+        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
         _logger.LogInformation(
             "Propagated local file upload: {LocalPath} -> {RemotePath} Size={Size}",
             action.LocalPath,
@@ -199,7 +199,7 @@ public sealed class Propagator
         {
             await _vfs.CreatePlaceholderAsync(action.LocalPath, metadata, ct);
             UpsertJournal(action with { FileId = fileId }, action.Remote, isDirectory: true, size: 0, checksum: null);
-            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
+            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
             _logger.LogInformation(
                 "Propagated remote directory download: {RemotePath} -> {LocalPath}",
                 action.Remote.RemotePath,
@@ -223,7 +223,7 @@ public sealed class Propagator
 
         await RequireInSyncAsync(action.LocalPath, ct);
         UpsertJournal(action with { FileId = fileId }, action.Remote, isDirectory: false, action.Remote.Size, checksum: null);
-        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
+        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
         _logger.LogInformation(
             "Propagated remote file placeholder: {RemotePath} -> {LocalPath} Size={Size}",
             action.Remote.RemotePath,
@@ -365,6 +365,16 @@ public sealed class Propagator
         if (string.IsNullOrWhiteSpace(action.PreviousRemotePath))
             throw new InvalidOperationException("MoveRemote requires previous remote path.");
 
+        if (RemotePathsEqual(action.PreviousRemotePath, action.RemotePath))
+        {
+            _logger.LogWarning(
+                "Skipping remote move because source and target remote paths are identical: {RemotePath} LocalPath={LocalPath}",
+                action.RemotePath,
+                action.LocalPath);
+            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
+            return;
+        }
+
         var previousLocalPath = action.PreviousLocalPath ?? action.Journal?.LocalPath ?? action.LocalPath;
         var previousSyncItem = _stateService?.GetByLocalPath(previousLocalPath);
         await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, ct);
@@ -396,7 +406,7 @@ public sealed class Propagator
                 InSync: true), ct);
         }
 
-        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Synced, ct);
+        await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
     }
 
     private async Task DeleteRemoteAsync(ReconcileAction action, CancellationToken ct)
@@ -545,7 +555,7 @@ public sealed class Propagator
                     ? localCopyInfo.LastWriteTimeUtc
                     : remoteCopy?.LastModified.ToUniversalTime());
 
-            await SetExplorerStateAsync(localConflictPath, ExplorerItemState.Synced, ct);
+            await SetExplorerStateAsync(localConflictPath, ExplorerItemState.Clear, ct);
             _logger.LogInformation(
                 "Created conflict copies: LocalCopy={LocalCopyPath} RemoteCopy={RemoteCopyPath}",
                 localConflictPath,
@@ -608,6 +618,22 @@ public sealed class Propagator
         var trimmed = remotePath.TrimEnd('/');
         var lastSlash = trimmed.LastIndexOf('/');
         return lastSlash <= 0 ? "/" : trimmed[..lastSlash];
+    }
+
+    private static bool RemotePathsEqual(string left, string right)
+    {
+        return string.Equals(
+            NormalizeRemotePath(left),
+            NormalizeRemotePath(right),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeRemotePath(string remotePath)
+    {
+        var normalized = remotePath.Replace('\\', '/').Trim();
+        if (normalized.Length > 1)
+            normalized = normalized.TrimEnd('/');
+        return normalized;
     }
 
     private Task SetExplorerStateAsync(string localPath, ExplorerItemState state, CancellationToken ct)

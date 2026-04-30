@@ -64,4 +64,20 @@ public class AppSettingsConfigurationTests
         status.IsComplete.ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("https://example.com/dav", "https://example.com/dav/", false)]
+    [InlineData(" https://EXAMPLE.com:443/dav/ ", "https://example.com/dav", false)]
+    [InlineData("http://example.com:80/dav", "http://example.com/dav/", false)]
+    [InlineData("https://example.com/dav", "https://example.com/other", true)]
+    [InlineData("https://example.com/dav", "https://other.example.com/dav", true)]
+    [InlineData("http://example.com/dav", "https://example.com/dav", true)]
+    [InlineData("", "https://example.com/dav", false)]
+    public void HasWebDavTargetChanged_NormalizesEquivalentTargets(
+        string storedUrl,
+        string candidateUrl,
+        bool expected)
+    {
+        AppSettings.HasWebDavTargetChanged(storedUrl, candidateUrl).ShouldBe(expected);
+    }
+
 }

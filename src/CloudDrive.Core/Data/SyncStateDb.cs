@@ -715,6 +715,33 @@ public class SyncStateDb : IDisposable
         UpdatePropagatorJobStatus(operationId, PropagatorJobStatus.Failed, error);
     }
 
+    public List<PropagatorJobRecord> GetActivePropagatorJobs(int limit = 100)
+    {
+        if (limit <= 0)
+            return [];
+
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT * FROM propagator_jobs
+                WHERE status IN (@pendingStatus, @leasedStatus, @failedStatus)
+                ORDER BY updated_at DESC, id DESC
+                LIMIT @limit
+                """;
+            cmd.Parameters.AddWithValue("@pendingStatus", (int)PropagatorJobStatus.Pending);
+            cmd.Parameters.AddWithValue("@leasedStatus", (int)PropagatorJobStatus.Leased);
+            cmd.Parameters.AddWithValue("@failedStatus", (int)PropagatorJobStatus.Failed);
+            cmd.Parameters.AddWithValue("@limit", limit);
+
+            var jobs = new List<PropagatorJobRecord>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                jobs.Add(ReadPropagatorJob(reader));
+            return jobs;
+        }
+    }
+
     private void UpdatePropagatorJobStatus(string operationId, PropagatorJobStatus status, string? error)
     {
         lock (_gate)
@@ -1184,7 +1211,8 @@ public class DatabaseStatistics
     public long PendingItems =>
         GetCount(SyncStatus.PendingUpload) +
         GetCount(SyncStatus.PendingDownload) +
-        GetCount(SyncStatus.Syncing);
+        GetCount(SyncStatus.Syncing) +
+        GetCount(SyncStatus.RemoteDeletePendingUserChoice);
     public long ErrorItems =>
         GetCount(SyncStatus.Error) +
         GetCount(SyncStatus.Conflict);

@@ -86,6 +86,8 @@ public sealed class DiscoveryWalker
             actions.Add(ClassifyExistingLocal(entry.LocalPath, remotePath, fileId, local, journalRecord, remote));
         }
 
+        SuppressAncestorDirectoryDeletesWithPendingLocalChanges(actions);
+
         foreach (var remote in remoteItems)
         {
             ct.ThrowIfCancellationRequested();
@@ -238,8 +240,11 @@ public sealed class DiscoveryWalker
 
         if (remote == null)
         {
-            return local != null && ConflictDetector.HasLocalChanged(local, journal)
-                ? new ReconcileAction(ReconcileActionType.Conflict, localPath, remotePath, fileId, local, journal, null)
+            if (IsPendingUserDecision(journal))
+                return ReconcileAction.NoOp(localPath, remotePath, fileId, local, journal, null);
+
+            return local is { IsDirectory: false } && ConflictDetector.HasLocalChanged(local, journal)
+                ? new ReconcileAction(ReconcileActionType.RemoteDeletedLocalChanged, localPath, remotePath, fileId, local, journal, null)
                 : new ReconcileAction(ReconcileActionType.DeleteLocal, localPath, remotePath, fileId, local, journal, null);
         }
 
@@ -253,6 +258,46 @@ public sealed class DiscoveryWalker
             return new ReconcileAction(ReconcileActionType.DownloadChanged, localPath, remotePath, fileId, local, journal, remote);
 
         return ReconcileAction.NoOp(localPath, remotePath, fileId, local, journal, remote);
+    }
+
+    private static bool IsPendingUserDecision(SyncJournalRecord journal)
+    {
+        return string.Equals(
+                   journal.LocalPendingOp,
+                   SyncPendingOperations.RemoteDeleteConfirmation,
+                   StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(
+                   journal.LocalPendingOp,
+                   SyncPendingOperations.RemoteDeletedLocalChanged,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void SuppressAncestorDirectoryDeletesWithPendingLocalChanges(List<ReconcileAction> actions)
+    {
+        var pendingLocalChanges = actions
+            .Where(action =>
+                action.Type == ReconcileActionType.RemoteDeletedLocalChanged ||
+                string.Equals(
+                    action.Journal?.LocalPendingOp,
+                    SyncPendingOperations.RemoteDeletedLocalChanged,
+                    StringComparison.OrdinalIgnoreCase))
+            .Select(action => action.LocalPath)
+            .ToList();
+
+        if (pendingLocalChanges.Count == 0)
+            return;
+
+        actions.RemoveAll(action =>
+            action.Type == ReconcileActionType.DeleteLocal &&
+            action.Journal?.IsDirectory == true &&
+            pendingLocalChanges.Any(path => IsDescendant(path, action.LocalPath)));
+    }
+
+    private static bool IsDescendant(string candidatePath, string ancestorPath)
+    {
+        var normalizedAncestor = ancestorPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return candidatePath.Length > normalizedAncestor.Length &&
+               candidatePath.StartsWith(normalizedAncestor + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     private ReconcileAction ClassifyMissingJournalBaseline(
