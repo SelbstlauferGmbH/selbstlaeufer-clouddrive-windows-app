@@ -298,7 +298,9 @@ public partial class App : System.Windows.Application
             return true;
 
         using var loggerFactory = LoggerFactory.Create(_ => { });
-        var wizard = new ConfigurationWizardWindow(new ConfigurationWizardViewModel(loggerFactory));
+        var wizard = new ConfigurationWizardWindow(new ConfigurationWizardViewModel(
+            loggerFactory,
+            remoteTargetResetCallback: CleanupLocalStateForRemoteTargetChangeBeforeStartupAsync));
         return wizard.ShowDialog() == true &&
                AppSettings.Load().HasCompleteAccountConfiguration(CredentialManager.HasPassword());
     }
@@ -768,7 +770,8 @@ public partial class App : System.Windows.Application
                 loggerFactory,
                 CreateDashboardContext(),
                 resetCallback: ResetCloudDriveLocalDataAsync,
-                resetConfigurationCallback: ResetCloudDriveConfigurationAndLogsAsync);
+                resetConfigurationCallback: ResetCloudDriveConfigurationAndLogsAsync,
+                remoteTargetResetCallback: ResetCloudDriveLocalDataForRemoteTargetChangeAsync);
             _settingsWindow = new SettingsWindow(vm);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
@@ -897,15 +900,43 @@ public partial class App : System.Windows.Application
     private static extern uint SetErrorMode(uint uMode);
 
     private Task ResetCloudDriveLocalDataAsync() =>
-        ResetCloudDriveWithSharedCleanupAsync(clearSavedConfiguration: false, clearLogs: false);
+        ResetCloudDriveWithSharedCleanupAsync(
+            AppSettings.Load(),
+            clearSavedConfiguration: false,
+            clearLogs: false);
 
     private Task ResetCloudDriveConfigurationAndLogsAsync() =>
-        ResetCloudDriveWithSharedCleanupAsync(clearSavedConfiguration: true, clearLogs: true);
+        ResetCloudDriveWithSharedCleanupAsync(
+            AppSettings.Load(),
+            clearSavedConfiguration: true,
+            clearLogs: true);
 
-    private async Task ResetCloudDriveWithSharedCleanupAsync(bool clearSavedConfiguration, bool clearLogs)
+    private Task ResetCloudDriveLocalDataForRemoteTargetChangeAsync(AppSettings previousSettings) =>
+        ResetCloudDriveWithSharedCleanupAsync(
+            previousSettings,
+            clearSavedConfiguration: false,
+            clearLogs: false,
+            restartAfterCleanup: true);
+
+    private async Task CleanupLocalStateForRemoteTargetChangeBeforeStartupAsync(AppSettings previousSettings)
     {
-        var settings = AppSettings.Load();
+        var cleanupService = new LocalStateCleanupService();
+        var cleanupResult = await cleanupService.CleanupAsync(
+            previousSettings,
+            new LocalStateCleanupOptions(
+                ClearSavedConfiguration: false,
+                ClearCredentials: false));
 
+        if (PromptForRebootIfRequired(cleanupResult))
+            Shutdown();
+    }
+
+    private async Task ResetCloudDriveWithSharedCleanupAsync(
+        AppSettings settings,
+        bool clearSavedConfiguration,
+        bool clearLogs,
+        bool restartAfterCleanup = false)
+    {
         if (_host != null)
         {
             await _host.StopAsync(TimeSpan.FromSeconds(10));
@@ -920,22 +951,7 @@ public partial class App : System.Windows.Application
                 ClearSavedConfiguration: clearSavedConfiguration,
                 ClearCredentials: clearSavedConfiguration));
 
-        if (cleanupResult.RequiresReboot)
-        {
-            Log.Warning("Reset: Sync root folder could not be deleted - reboot may be required");
-
-            var rebootResult = System.Windows.MessageBox.Show(
-                AppLocalizer.Instance.GetString("Reset_RestartRequired_Message"),
-                AppLocalizer.Instance.GetString("Reset_RestartRequired_Title"),
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Information,
-                System.Windows.MessageBoxResult.No);
-
-            if (rebootResult == System.Windows.MessageBoxResult.Yes)
-            {
-                Process.Start("shutdown", "/r /t 5 /c \"CloudDrive reset: restarting to complete cleanup\"");
-            }
-        }
+        var rebootRequested = PromptForRebootIfRequired(cleanupResult);
 
         if (clearLogs)
         {
@@ -955,8 +971,32 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (restartAfterCleanup && !rebootRequested)
+            RestartApplication();
+
         Log.CloseAndFlush();
         Shutdown();
+    }
+
+    private static bool PromptForRebootIfRequired(LocalStateCleanupResult cleanupResult)
+    {
+        if (!cleanupResult.RequiresReboot)
+            return false;
+
+        Log.Warning("Reset: Sync root folder could not be deleted - reboot may be required");
+
+        var rebootResult = System.Windows.MessageBox.Show(
+            AppLocalizer.Instance.GetString("Reset_RestartRequired_Message"),
+            AppLocalizer.Instance.GetString("Reset_RestartRequired_Title"),
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information,
+            System.Windows.MessageBoxResult.No);
+
+        if (rebootResult != System.Windows.MessageBoxResult.Yes)
+            return false;
+
+        Process.Start("shutdown", "/r /t 5 /c \"CloudDrive reset: restarting to complete cleanup\"");
+        return true;
     }
 
     private async Task ResetCloudDriveAsync(bool clearSavedConfiguration, bool clearLogs)

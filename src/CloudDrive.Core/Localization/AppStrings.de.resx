@@ -66,6 +66,9 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   <data name="Common_Close" xml:space="preserve">
     <value>Schließen</value>
   </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>Abbrechen</value>
+  </data>
   <data name="Common_Open" xml:space="preserve">
     <value>Öffnen</value>
   </data>
@@ -215,6 +218,36 @@ Moechten Sie CloudDrive jetzt neu starten?</value>
   </data>
   <data name="Wizard_Status_Starting" xml:space="preserve">
     <value>Einstellungen gespeichert. Selbstläufer CloudDrive wird gestartet.</value>
+  </data>
+  <data name="RemoteTargetChange_Heading" xml:space="preserve">
+    <value>WebDAV-Ziel geaendert</value>
+  </data>
+  <data name="RemoteTargetChange_Summary" xml:space="preserve">
+    <value>CloudDrive hat erkannt, dass die WebDAV-URL von der gespeicherten Adresse abweicht. Ist dies weiterhin dasselbe Ziel mit neuen Zugangsdaten, oder verbinden Sie dieses Geraet mit einem anderen Ziel?</value>
+  </data>
+  <data name="RemoteTargetChange_OldTarget" xml:space="preserve">
+    <value>Gespeichertes Ziel</value>
+  </data>
+  <data name="RemoteTargetChange_NewTarget" xml:space="preserve">
+    <value>Neues Ziel</value>
+  </data>
+  <data name="RemoteTargetChange_Warning" xml:space="preserve">
+    <value>Bei einem anderen Ziel setzt CloudDrive die lokalen Synchronisierungsdaten und das Journal zurueck, bevor der naechste Scan startet. So werden alte Platzhalter und Pfade nicht mit dem neuen Server abgeglichen.</value>
+  </data>
+  <data name="RemoteTargetChange_KeepButton" xml:space="preserve">
+    <value>Gleiches Ziel, Daten behalten</value>
+  </data>
+  <data name="RemoteTargetChange_ResetButton" xml:space="preserve">
+    <value>Anderes Ziel, Daten zuruecksetzen</value>
+  </data>
+  <data name="RemoteTargetChange_Status_SaveCancelled" xml:space="preserve">
+    <value>Speichern abgebrochen</value>
+  </data>
+  <data name="RemoteTargetChange_Status_ResetUnavailable" xml:space="preserve">
+    <value>Einstellungen gespeichert, aber lokales Zuruecksetzen ist nicht verfuegbar.</value>
+  </data>
+  <data name="RemoteTargetChange_Status_Resetting" xml:space="preserve">
+    <value>Einstellungen gespeichert. Lokale Synchronisierungsdaten werden zurueckgesetzt...</value>
   </data>
   <data name="Navigation_Group_Main" xml:space="preserve">
     <value>Hauptbereiche</value>

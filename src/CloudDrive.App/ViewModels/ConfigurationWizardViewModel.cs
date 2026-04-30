@@ -17,6 +17,7 @@ public partial class ConfigurationWizardViewModel : ObservableObject, IDisposabl
 
     private readonly ILoggerFactory _loggerFactory;
     private readonly IAutoStartRegistration _autoStartRegistration;
+    private readonly Func<AppSettings, Task>? _remoteTargetResetCallback;
     private bool _isDisposed;
 
     [ObservableProperty] private int _currentStepIndex = PreferencesStepIndex;
@@ -30,10 +31,14 @@ public partial class ConfigurationWizardViewModel : ObservableObject, IDisposabl
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private bool _isTesting;
 
-    public ConfigurationWizardViewModel(ILoggerFactory loggerFactory, IAutoStartRegistration? autoStartRegistration = null)
+    public ConfigurationWizardViewModel(
+        ILoggerFactory loggerFactory,
+        IAutoStartRegistration? autoStartRegistration = null,
+        Func<AppSettings, Task>? remoteTargetResetCallback = null)
     {
         _loggerFactory = loggerFactory;
         _autoStartRegistration = autoStartRegistration ?? new WindowsAutoStartRegistration();
+        _remoteTargetResetCallback = remoteTargetResetCallback;
         ThemeOptions = new ObservableCollection<SelectionOption>();
         LanguageOptions = new ObservableCollection<SelectionOption>();
 
@@ -151,14 +156,8 @@ public partial class ConfigurationWizardViewModel : ObservableObject, IDisposabl
 
     public async Task<bool> FinishAsync()
     {
-        HasStoredPassword = CredentialManager.HasPassword();
-        var validationMessage = ValidateAccountConfiguration(requirePassword: true);
-        if (!string.IsNullOrEmpty(validationMessage))
-        {
-            StatusMessage = validationMessage;
-            CurrentStepIndex = AccountStepIndex;
+        if (!ValidateFinish())
             return false;
-        }
 
         var settings = AppSettings.Load();
         settings.ThemeMode = NormalizeThemeMode(ThemeMode);
@@ -180,6 +179,40 @@ public partial class ConfigurationWizardViewModel : ObservableObject, IDisposabl
 
         await Task.CompletedTask;
         return true;
+    }
+
+    public bool ValidateFinish()
+    {
+        HasStoredPassword = CredentialManager.HasPassword();
+        var validationMessage = ValidateAccountConfiguration(requirePassword: true);
+        if (string.IsNullOrEmpty(validationMessage))
+            return true;
+
+        StatusMessage = validationMessage;
+        CurrentStepIndex = AccountStepIndex;
+        return false;
+    }
+
+    public bool HasRemoteTargetChanged()
+    {
+        return AppSettings.HasWebDavTargetChanged(AppSettings.Load().WebDavUrl, WebDavUrl);
+    }
+
+    public AppSettings CreateSavedSettingsSnapshot()
+    {
+        return AppSettings.Load().Clone();
+    }
+
+    public async Task ResetLocalStateForRemoteTargetChangeAsync(AppSettings previousSettings)
+    {
+        if (_remoteTargetResetCallback == null)
+        {
+            StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_ResetUnavailable");
+            return;
+        }
+
+        StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_Resetting");
+        await _remoteTargetResetCallback(previousSettings);
     }
 
     public void Dispose()

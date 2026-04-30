@@ -94,10 +94,45 @@ public partial class SettingsWindow : Window
     {
         if (DataContext is SettingsViewModel vm)
         {
+            var targetChangeDecision = RemoteTargetChangeDecision.KeepLocalState;
+            AppSettings? previousSettings = null;
+
+            if (vm.HasRemoteTargetChanged())
+            {
+                previousSettings = vm.CreateSavedSettingsSnapshot();
+                targetChangeDecision = ShowRemoteTargetChangeDialog(
+                    previousSettings.WebDavUrl,
+                    vm.WebDavUrl);
+
+                if (targetChangeDecision == RemoteTargetChangeDecision.Cancel)
+                {
+                    vm.StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_SaveCancelled");
+                    return;
+                }
+            }
+
             await vm.SaveCommand.ExecuteAsync(GetEnteredPassword());
             SetPasswordBoxValue(string.Empty, showingStoredPasswordMask: false);
             SyncPasswordBoxMask();
+
+            if (targetChangeDecision == RemoteTargetChangeDecision.ResetLocalState &&
+                previousSettings != null)
+            {
+                await vm.ResetLocalStateForRemoteTargetChangeAsync(previousSettings);
+            }
         }
+    }
+
+    private RemoteTargetChangeDecision ShowRemoteTargetChangeDialog(string oldTarget, string newTarget)
+    {
+        var dialog = new RemoteTargetChangeWindow(oldTarget, newTarget)
+        {
+            Owner = this
+        };
+
+        return dialog.ShowDialog() == true
+            ? dialog.Decision
+            : RemoteTargetChangeDecision.Cancel;
     }
 
     private void PasswordBox_GotFocus(object sender, RoutedEventArgs e)

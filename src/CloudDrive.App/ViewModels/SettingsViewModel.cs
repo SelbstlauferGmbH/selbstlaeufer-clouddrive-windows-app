@@ -22,6 +22,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAutoStartRegistration _autoStartRegistration;
     private readonly Func<Task>? _resetCallback;
     private readonly Func<Task>? _resetConfigurationCallback;
+    private readonly Func<AppSettings, Task>? _remoteTargetResetCallback;
     private readonly ActivityTracker? _activityTracker;
     private IReadOnlyList<ActivityDisplayItem> _allActivityItems = [];
     private IReadOnlyList<ProblemDisplayItem> _allProblemItems = [];
@@ -59,13 +60,15 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AppDashboardContext dashboardContext,
         IAutoStartRegistration? autoStartRegistration = null,
         Func<Task>? resetCallback = null,
-        Func<Task>? resetConfigurationCallback = null)
+        Func<Task>? resetConfigurationCallback = null,
+        Func<AppSettings, Task>? remoteTargetResetCallback = null)
     {
         _loggerFactory = loggerFactory;
         _dashboardContext = dashboardContext;
         _autoStartRegistration = autoStartRegistration ?? new WindowsAutoStartRegistration();
         _resetCallback = resetCallback;
         _resetConfigurationCallback = resetConfigurationCallback;
+        _remoteTargetResetCallback = remoteTargetResetCallback;
         _activityTracker = dashboardContext.ActivityTracker as ActivityTracker;
 
         NavigationItems = new ObservableCollection<SettingsNavigationItem>();
@@ -359,6 +362,29 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         await RefreshAsync(forceHealthCheck: true);
         StatusMessage = AppLocalizer.Instance.GetString("Settings_Status_HealthChecksUpdated");
+    }
+
+    public bool HasRemoteTargetChanged()
+    {
+        var settings = _dashboardContext.SettingsProvider();
+        return AppSettings.HasWebDavTargetChanged(settings.WebDavUrl, WebDavUrl);
+    }
+
+    public AppSettings CreateSavedSettingsSnapshot()
+    {
+        return _dashboardContext.SettingsProvider().Clone();
+    }
+
+    public async Task ResetLocalStateForRemoteTargetChangeAsync(AppSettings previousSettings)
+    {
+        if (_remoteTargetResetCallback == null)
+        {
+            StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_ResetUnavailable");
+            return;
+        }
+
+        StatusMessage = AppLocalizer.Instance.GetString("RemoteTargetChange_Status_Resetting");
+        await _remoteTargetResetCallback(previousSettings);
     }
 
     public async Task ExecuteHealthActionAsync(string actionId)

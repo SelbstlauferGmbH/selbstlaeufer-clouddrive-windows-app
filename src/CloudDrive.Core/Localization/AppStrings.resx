@@ -66,6 +66,9 @@ Do you want to restart CloudDrive now?</value>
   <data name="Common_Close" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
   <data name="Common_Open" xml:space="preserve">
     <value>Open</value>
   </data>
@@ -215,6 +218,36 @@ Do you want to restart CloudDrive now?</value>
   </data>
   <data name="Wizard_Status_Starting" xml:space="preserve">
     <value>Settings saved. Selbstläufer CloudDrive is starting.</value>
+  </data>
+  <data name="RemoteTargetChange_Heading" xml:space="preserve">
+    <value>WebDAV target changed</value>
+  </data>
+  <data name="RemoteTargetChange_Summary" xml:space="preserve">
+    <value>CloudDrive noticed that the WebDAV URL is different from the saved account. Is this still the same remote location with updated credentials, or are you connecting this device to a different remote?</value>
+  </data>
+  <data name="RemoteTargetChange_OldTarget" xml:space="preserve">
+    <value>Saved target</value>
+  </data>
+  <data name="RemoteTargetChange_NewTarget" xml:space="preserve">
+    <value>New target</value>
+  </data>
+  <data name="RemoteTargetChange_Warning" xml:space="preserve">
+    <value>If this is a different remote, CloudDrive will reset local sync data and the journal before the next scan so old placeholders and paths are not matched against the new server.</value>
+  </data>
+  <data name="RemoteTargetChange_KeepButton" xml:space="preserve">
+    <value>Same target, keep data</value>
+  </data>
+  <data name="RemoteTargetChange_ResetButton" xml:space="preserve">
+    <value>New target, reset data</value>
+  </data>
+  <data name="RemoteTargetChange_Status_SaveCancelled" xml:space="preserve">
+    <value>Save cancelled</value>
+  </data>
+  <data name="RemoteTargetChange_Status_ResetUnavailable" xml:space="preserve">
+    <value>Settings saved, but local reset is unavailable.</value>
+  </data>
+  <data name="RemoteTargetChange_Status_Resetting" xml:space="preserve">
+    <value>Settings saved. Resetting local sync data...</value>
   </data>
   <data name="Navigation_Group_Main" xml:space="preserve">
     <value>Main</value>

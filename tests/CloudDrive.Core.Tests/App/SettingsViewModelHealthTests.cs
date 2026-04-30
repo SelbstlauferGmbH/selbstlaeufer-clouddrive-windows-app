@@ -145,6 +145,49 @@ public class SettingsViewModelHealthTests
         callbackInvocations.ShouldBe(1);
     }
 
+    [Fact]
+    public void HasRemoteTargetChanged_WhenOnlyCredentialsChange_ReturnsFalse()
+    {
+        using var harness = new SettingsViewModelHarness(enableFileLogging: false);
+        using var viewModel = harness.CreateViewModel();
+
+        viewModel.Username = "other-user";
+
+        viewModel.HasRemoteTargetChanged().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void HasRemoteTargetChanged_WhenWebDavUrlChanges_ReturnsTrue()
+    {
+        using var harness = new SettingsViewModelHarness(enableFileLogging: false);
+        using var viewModel = harness.CreateViewModel();
+
+        viewModel.WebDavUrl = "https://example.org/webdav";
+
+        viewModel.HasRemoteTargetChanged().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ResetLocalStateForRemoteTargetChangeAsync_InvokesCallbackWithPreviousSettings()
+    {
+        using var harness = new SettingsViewModelHarness(enableFileLogging: false);
+        AppSettings? capturedSettings = null;
+        var previousSettings = harness.Settings.Clone();
+
+        using var viewModel = harness.CreateViewModel(
+            remoteTargetResetCallback: settings =>
+            {
+                capturedSettings = settings;
+                return Task.CompletedTask;
+            });
+
+        await viewModel.ResetLocalStateForRemoteTargetChangeAsync(previousSettings);
+
+        capturedSettings.ShouldNotBeNull();
+        capturedSettings.WebDavUrl.ShouldBe("https://example.com/webdav");
+        capturedSettings.SyncRootPath.ShouldBe(harness.Settings.SyncRootPath);
+    }
+
     private sealed class SettingsViewModelHarness : IDisposable
     {
         private readonly string _tempDirectory;
@@ -182,6 +225,7 @@ public class SettingsViewModelHealthTests
             Func<Task>? checkForUpdatesNowAsync = null,
             Func<Task>? resetCallback = null,
             Func<Task>? resetConfigurationCallback = null,
+            Func<AppSettings, Task>? remoteTargetResetCallback = null,
             Action? applyUpdateAndRestart = null)
         {
             return new SettingsViewModel(
@@ -204,7 +248,8 @@ public class SettingsViewModelHealthTests
                     startedAt: new DateTime(2026, 4, 8, 12, 0, 0, DateTimeKind.Local),
                     applyUpdateAndRestart: applyUpdateAndRestart),
                 resetCallback: resetCallback,
-                resetConfigurationCallback: resetConfigurationCallback);
+                resetConfigurationCallback: resetConfigurationCallback,
+                remoteTargetResetCallback: remoteTargetResetCallback);
         }
 
         public void Dispose()
