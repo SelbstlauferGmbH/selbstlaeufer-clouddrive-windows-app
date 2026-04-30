@@ -1289,6 +1289,26 @@ Saved account settings, stored password, app preferences, local metadata, and lo
   <data name="Reset_RestartRequired_Message" xml:space="preserve">
     <value>CloudDrive needs to restart Windows to finish cleaning up the sync folder.</value>
   </data>
+  <data name="Startup_StaleLocalState_Title" xml:space="preserve">
+    <value>Repair local sync state</value>
+  </data>
+  <data name="Startup_StaleLocalState_Message" xml:space="preserve">
+    <value>CloudDrive found stale local sync operations from an earlier run ({0} item(s)). This can block folder navigation or keep retrying failed moves.
+
+Cleaning removes the local sync folder and local metadata at:
+{1}
+
+Your WebDAV files, saved account settings, and stored password stay in place.
+
+Choose Yes to clean and continue.
+Choose No to start without cleaning.</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Title" xml:space="preserve">
+    <value>Cleanup failed</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Message" xml:space="preserve">
+    <value>CloudDrive could not clean the stale local sync state. The app will now exit so the existing files stay untouched.</value>
+  </data>
   <data name="Install_CleanupWarning_Title" xml:space="preserve">
     <value>Clean existing sync folder</value>
   </data>

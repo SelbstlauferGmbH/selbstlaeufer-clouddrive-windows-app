@@ -166,6 +166,15 @@ public partial class App : System.Windows.Application
         }
 
         settings = AppSettings.Load();
+        localizer.Initialize(settings.Language);
+
+        if (!await OfferStartupLocalStateCleanupAsync(settings))
+        {
+            Shutdown();
+            return;
+        }
+
+        settings = AppSettings.Load();
         RegisterExplorerIntegration(settings);
         localizer.Initialize(settings.Language);
         ThemeManager.ApplyTheme(settings.ThemeMode);
@@ -303,6 +312,78 @@ public partial class App : System.Windows.Application
             remoteTargetResetCallback: CleanupLocalStateForRemoteTargetChangeBeforeStartupAsync));
         return wizard.ShowDialog() == true &&
                AppSettings.Load().HasCompleteAccountConfiguration(CredentialManager.HasPassword());
+    }
+
+    private async Task<bool> OfferStartupLocalStateCleanupAsync(AppSettings settings)
+    {
+        if (!settings.HasCompleteAccountConfiguration(CredentialManager.HasPassword()))
+            return true;
+
+        LocalSyncStateHealthCheckResult healthCheck;
+        try
+        {
+            healthCheck = LocalSyncStateHealthChecker.Inspect(settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Startup local state health check failed");
+            return true;
+        }
+
+        if (!healthCheck.HasSuspiciousState)
+            return true;
+
+        Log.Warning(
+            "Startup local state health check found suspicious sync operations: Suspicious={SuspiciousCount} Active={ActiveCount} ExampleLocalPath={ExampleLocalPath} ExampleRemotePath={ExampleRemotePath} Reason={Reason}",
+            healthCheck.SuspiciousOperationCount,
+            healthCheck.ActiveOperationCount,
+            healthCheck.ExampleLocalPath,
+            healthCheck.ExampleRemotePath,
+            healthCheck.Reason);
+
+        var localizer = AppLocalizer.Instance;
+        var result = System.Windows.MessageBox.Show(
+            localizer.Format(
+                "Startup_StaleLocalState_Message",
+                healthCheck.SuspiciousOperationCount,
+                settings.SyncRootPath),
+            localizer.GetString("Startup_StaleLocalState_Title"),
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.Yes);
+
+        if (result != System.Windows.MessageBoxResult.Yes)
+        {
+            Log.Warning("Startup local state cleanup declined");
+            return true;
+        }
+
+        try
+        {
+            var cleanupService = new LocalStateCleanupService();
+            var cleanupResult = await cleanupService.CleanupAsync(
+                settings,
+                new LocalStateCleanupOptions(
+                    ClearSavedConfiguration: false,
+                    ClearCredentials: false));
+
+            _ = PromptForRebootIfRequired(cleanupResult);
+            if (cleanupResult.RequiresReboot)
+                return false;
+
+            Log.Information("Startup local state cleanup completed");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Startup local state cleanup failed");
+            System.Windows.MessageBox.Show(
+                localizer.GetString("Startup_StaleLocalState_CleanupFailed_Message"),
+                localizer.GetString("Startup_StaleLocalState_CleanupFailed_Title"),
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+            return false;
+        }
     }
 
     protected override async void OnExit(System.Windows.ExitEventArgs e)

@@ -365,6 +365,16 @@ public sealed class Propagator
         if (string.IsNullOrWhiteSpace(action.PreviousRemotePath))
             throw new InvalidOperationException("MoveRemote requires previous remote path.");
 
+        if (RemotePathsEqual(action.PreviousRemotePath, action.RemotePath))
+        {
+            _logger.LogWarning(
+                "Skipping remote move because source and target remote paths are identical: {RemotePath} LocalPath={LocalPath}",
+                action.RemotePath,
+                action.LocalPath);
+            await SetExplorerStateAsync(action.LocalPath, ExplorerItemState.Clear, ct);
+            return;
+        }
+
         var previousLocalPath = action.PreviousLocalPath ?? action.Journal?.LocalPath ?? action.LocalPath;
         var previousSyncItem = _stateService?.GetByLocalPath(previousLocalPath);
         await _webDav.MoveAsync(action.PreviousRemotePath, action.RemotePath, ct);
@@ -608,6 +618,22 @@ public sealed class Propagator
         var trimmed = remotePath.TrimEnd('/');
         var lastSlash = trimmed.LastIndexOf('/');
         return lastSlash <= 0 ? "/" : trimmed[..lastSlash];
+    }
+
+    private static bool RemotePathsEqual(string left, string right)
+    {
+        return string.Equals(
+            NormalizeRemotePath(left),
+            NormalizeRemotePath(right),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeRemotePath(string remotePath)
+    {
+        var normalized = remotePath.Replace('\\', '/').Trim();
+        if (normalized.Length > 1)
+            normalized = normalized.TrimEnd('/');
+        return normalized;
     }
 
     private Task SetExplorerStateAsync(string localPath, ExplorerItemState state, CancellationToken ct)

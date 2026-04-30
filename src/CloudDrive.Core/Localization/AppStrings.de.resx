@@ -1289,6 +1289,26 @@ Gespeicherte Kontoeinstellungen, das gespeicherte Passwort, App-Einstellungen, l
   <data name="Reset_RestartRequired_Message" xml:space="preserve">
     <value>CloudDrive muss Windows neu starten, um die Bereinigung des Synchronisierungsordners abzuschließen.</value>
   </data>
+  <data name="Startup_StaleLocalState_Title" xml:space="preserve">
+    <value>Lokalen Sync-Status reparieren</value>
+  </data>
+  <data name="Startup_StaleLocalState_Message" xml:space="preserve">
+    <value>CloudDrive hat veraltete lokale Sync-Vorgaenge aus einem frueheren Lauf gefunden ({0} Element(e)). Das kann die Ordnernavigation blockieren oder fehlgeschlagene Verschiebungen wiederholen.
+
+Die Bereinigung entfernt den lokalen Synchronisierungsordner und lokale Metadaten unter:
+{1}
+
+Ihre WebDAV-Dateien, gespeicherten Kontoeinstellungen und das gespeicherte Passwort bleiben erhalten.
+
+Waehlen Sie Ja, um zu bereinigen und fortzufahren.
+Waehlen Sie Nein, um ohne Bereinigung zu starten.</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Title" xml:space="preserve">
+    <value>Bereinigung fehlgeschlagen</value>
+  </data>
+  <data name="Startup_StaleLocalState_CleanupFailed_Message" xml:space="preserve">
+    <value>CloudDrive konnte den veralteten lokalen Sync-Status nicht bereinigen. Die App wird jetzt beendet, damit vorhandene Dateien unveraendert bleiben.</value>
+  </data>
   <data name="Install_CleanupWarning_Title" xml:space="preserve">
     <value>Vorhandenen Sync-Ordner bereinigen</value>
   </data>

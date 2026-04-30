@@ -93,6 +93,48 @@ public sealed class PropagatorTests
 
     [Fact]
     [Trait("Category", "SyncEngine")]
+    public async Task MoveRemote_WhenRemotePathIsUnchanged_CompletesWithoutCallingWebDavMove()
+    {
+        using var tempDir = new TempDirectory();
+        var oldLocalPath = Path.Combine(tempDir.Path, "Microsoft Excel Worksheet (neu).xlsx");
+        var tempLocalPath = Path.Combine(tempDir.Path, "BBE79172.tmp");
+
+        using var db = new SyncStateDb(Path.Combine(tempDir.Path, "syncstate.db"));
+        var journal = new SyncJournal(db);
+        var stateService = new SyncItemStateService(db);
+        journal.Upsert(new SyncJournalRecord
+        {
+            FileId = "file-1",
+            LocalPath = oldLocalPath,
+            RemotePath = "/Neuer Ordner/Microsoft Excel Worksheet (neu).xlsx",
+            ETag = "etag-1",
+            Size = 10,
+            MTimeUtc = DateTime.UtcNow,
+            InSync = true
+        });
+
+        var vfs = new SuffixVfs(tempDir.Path);
+        var webDav = new FakeWebDavService();
+        webDav.AddFile("/Neuer Ordner/Microsoft Excel Worksheet (neu).xlsx", "server", "etag-1");
+        var propagator = CreatePropagator(vfs, journal, webDav, stateService);
+
+        await propagator.ApplyAsync(new ReconcileAction(
+            ReconcileActionType.MoveRemote,
+            tempLocalPath,
+            "/Neuer Ordner/Microsoft Excel Worksheet (neu).xlsx",
+            "file-1",
+            Local: null,
+            Journal: journal.GetByFileId("file-1"),
+            Remote: null,
+            PreviousLocalPath: oldLocalPath,
+            PreviousRemotePath: "/Neuer Ordner/Microsoft Excel Worksheet (neu).xlsx"), CancellationToken.None);
+
+        (await webDav.GetPropertiesAsync("/Neuer Ordner/Microsoft Excel Worksheet (neu).xlsx")).ShouldNotBeNull();
+        journal.GetByFileId("file-1")?.LocalPath.ShouldBe(oldLocalPath);
+    }
+
+    [Fact]
+    [Trait("Category", "SyncEngine")]
     public async Task DownloadNew_File_CreatesDehydratedPlaceholderWithoutReadingContent()
     {
         using var tempDir = new TempDirectory();
