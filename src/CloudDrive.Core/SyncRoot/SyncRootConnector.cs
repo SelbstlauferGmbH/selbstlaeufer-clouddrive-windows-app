@@ -235,62 +235,7 @@ public class SyncRootConnector : IDisposable
     }
 
     /// <summary>
-    /// Signals the provider's current status to Windows (IDLE, CONNECTIVITY_LOST, DISCONNECTED, etc.).
-    /// Connection-scoped — auto-clears when the process dies.
-    /// </summary>
-    public void UpdateSyncProviderStatus(CF_SYNC_PROVIDER_STATUS status)
-    {
-        if (!_connected)
-        {
-            _logger.LogDebug("UpdateSyncProviderStatus skipped — not connected");
-            return;
-        }
-
-        var hr = CfUpdateSyncProviderStatus(_connectionKey, status);
-        if (hr.Succeeded)
-            _logger.LogDebug("CfUpdateSyncProviderStatus set to {Status}", status);
-        else
-            _logger.LogWarning("CfUpdateSyncProviderStatus failed: {HR}", hr);
-    }
-
-    /// <summary>
-    /// Sets a persistent sync status message on the sync root path (visible in Explorer even after crash).
-    /// </summary>
-    public static void ReportSyncStatus(string syncRootPath, string description)
-    {
-        // CF_SYNC_STATUS is a variable-length struct with embedded string.
-        // We must allocate and marshal it manually.
-        var descBytes = System.Text.Encoding.Unicode.GetBytes(description);
-        var structSize = Marshal.SizeOf<CF_SYNC_STATUS>() + descBytes.Length;
-
-        var ptr = Marshal.AllocHGlobal(structSize);
-        try
-        {
-            // Zero out the memory
-            for (int i = 0; i < structSize; i++)
-                Marshal.WriteByte(ptr, i, 0);
-
-            var syncStatus = new CF_SYNC_STATUS
-            {
-                StructSize = (uint)structSize,
-                Code = 0, // Custom
-                DescriptionOffset = (uint)Marshal.SizeOf<CF_SYNC_STATUS>(),
-                DescriptionLength = (uint)descBytes.Length
-            };
-
-            Marshal.StructureToPtr(syncStatus, ptr, false);
-            Marshal.Copy(descBytes, 0, ptr + Marshal.SizeOf<CF_SYNC_STATUS>(), descBytes.Length);
-
-            CfReportSyncStatus(syncRootPath, ptr);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(ptr);
-        }
-    }
-
-    /// <summary>
-    /// Clears any persistent sync status on the sync root path.
+    /// Clears any persistent sync status on the sync root path left by older versions.
     /// </summary>
     public static void ClearSyncStatus(string syncRootPath)
     {

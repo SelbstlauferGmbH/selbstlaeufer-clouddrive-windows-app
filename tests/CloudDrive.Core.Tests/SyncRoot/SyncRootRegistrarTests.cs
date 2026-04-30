@@ -6,6 +6,52 @@ namespace CloudDrive.Core.Tests.SyncRoot;
 public class SyncRootRegistrarTests
 {
     [Fact]
+    public void GetNavigationPaneIconResource_ReturnsQuotedIconResource_WhenIconExists()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("clouddrive-icon-test-");
+        var iconPath = Path.Combine(tempDir.FullName, SyncRootRegistrar.NavigationPaneIconFileName);
+
+        try
+        {
+            File.WriteAllText(iconPath, string.Empty);
+
+            var iconResource = SyncRootRegistrar.GetNavigationPaneIconResource(iconPath);
+
+            iconResource.ShouldBe($"\"{iconPath}\",0");
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetNavigationPaneIconResource_FallsBackToProcessIcon_WhenIconIsMissing()
+    {
+        var iconResource = SyncRootRegistrar.GetNavigationPaneIconResource(
+            Path.Combine(Path.GetTempPath(), "missing-favicon.ico"));
+
+        var expected = !string.IsNullOrWhiteSpace(Environment.ProcessPath) && File.Exists(Environment.ProcessPath)
+            ? $"\"{Environment.ProcessPath}\",0"
+            : SyncRootRegistrar.FallbackNavigationPaneIconResource;
+        iconResource.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData(null, @"""C:\Apps\CloudDrive.App.exe"",0", true)]
+    [InlineData(@"%SystemRoot%\system32\imageres.dll,-1043", @"""C:\Apps\CloudDrive.App.exe"",0", true)]
+    [InlineData(@"""C:\Apps\CloudDrive.App.exe"",0", @"""C:\Apps\CloudDrive.App.exe"",0", false)]
+    [InlineData(@"C:\Apps\CloudDrive.App.exe,0", @"""C:\Apps\CloudDrive.App.exe"",0", false)]
+    public void NeedsIconResourceRefresh_OnlyRefreshesWhenRootIconDiffers(
+        string? registeredIconResource,
+        string expectedIconResource,
+        bool expected)
+    {
+        SyncRootRegistrar.NeedsIconResourceRefresh(registeredIconResource, expectedIconResource)
+            .ShouldBe(expected);
+    }
+
+    [Fact]
     public void ShouldCleanupShellNamespaceRegistration_ReturnsFalse_ForCurrentSyncRoot()
     {
         var registration = new ShellNamespaceRegistrationInfo(

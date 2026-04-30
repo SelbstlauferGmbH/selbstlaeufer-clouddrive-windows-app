@@ -6,7 +6,6 @@ using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.Vfs;
 using CloudDrive.Core.WebDav;
 using Microsoft.Extensions.Logging;
-using static Vanara.PInvoke.CldApi;
 
 namespace CloudDrive.Core.SyncEngine;
 
@@ -54,7 +53,6 @@ public class SyncCoordinator : IDisposable
     private ConnectionState _connectionState = ConnectionState.Initial();
     private Task? _reconnectTask;
     private CancellationTokenSource? _reconnectCts;
-    private ExplorerStatusManager? _explorerStatusManager;
     private readonly SemaphoreSlim _remoteScanGate = new(1, 1);
 
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
@@ -160,14 +158,6 @@ public class SyncCoordinator : IDisposable
     }
 
     /// <summary>
-    /// Sets the ExplorerStatusManager for visual state updates in Windows Explorer.
-    /// </summary>
-    public void SetExplorerStatusManager(ExplorerStatusManager manager)
-    {
-        _explorerStatusManager = manager;
-    }
-
-    /// <summary>
     /// Register sync root and connect cfapi callbacks.
     /// Called only after readiness gate is fully verified (stale cleanup + connection + listing).
     /// </summary>
@@ -188,10 +178,8 @@ public class SyncCoordinator : IDisposable
         _hydrationHandler.SetConnectionKey(key);
         _dehydrationHandler.SetConnectionKey(key);
 
-        // Initialize connection state and update Explorer visual state
+        // Initialize connection state.
         _connectionState = ConnectionState.Connected();
-        _ = _explorerStatusManager?.SetStateAsync(
-            ExplorerVisualState.Connected, _settings.SyncRootPath, _connector);
 
         CurrentState = SyncState.Syncing;
         StateChanged?.Invoke(SyncState.Syncing);
@@ -258,8 +246,6 @@ public class SyncCoordinator : IDisposable
                 await _reconnectTask;
         }
         catch (OperationCanceledException) { }
-
-        _connector.UpdateSyncProviderStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_DISCONNECTED);
 
         _connector.Disconnect();
 
@@ -424,10 +410,6 @@ public class SyncCoordinator : IDisposable
                 LastOccurredAt = DateTime.UtcNow
             });
 
-            // Update Explorer visual state to Disconnected (Layers 1+2+3)
-            _ = _explorerStatusManager?.SetStateAsync(
-                ExplorerVisualState.Disconnected, _settings.SyncRootPath, _connector);
-
             _stateMachine.TransitionTo(MountPhase.ConnectionLost);
 
             // Mark handlers as not ready — they'll return NETWORK_UNAVAILABLE for file operations
@@ -472,10 +454,6 @@ public class SyncCoordinator : IDisposable
                     _logger.LogInformation("Connection restored — resuming sync");
 
                     _connectionState = _connectionState.RecordSuccess();
-
-                    // Update Explorer visual state to Connected (Layers 1+2+3)
-                    _ = _explorerStatusManager?.SetStateAsync(
-                        ExplorerVisualState.Connected, _settings.SyncRootPath, _connector);
 
                     _hydrationHandler.SetWebDavReady(true);
                     _placeholderManager.SetWebDavReady(true);

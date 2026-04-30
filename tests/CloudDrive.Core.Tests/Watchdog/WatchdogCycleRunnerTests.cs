@@ -1,6 +1,5 @@
 using CloudDrive.Core.Configuration;
 using CloudDrive.Core.Localization;
-using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.Watchdog;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
@@ -18,10 +17,8 @@ public class WatchdogCycleRunnerTests
     public async Task RunAsync_WhenAppRunningAndHealthy_SavesConnectedSnapshotAndAppendsSuccessMessage()
     {
         var store = new InMemoryWatchdogStatusStore();
-        var explorerWriter = new RecordingExplorerWriter();
         var runner = CreateRunner(
             store,
-            explorerWriter,
             appRunning: true,
             cleanupResult: new WatchdogPendingCleanupResult(WatchdogPendingCleanupOutcome.None),
             healthProbeResult: WatchdogHealthProbeResult.Connected(42));
@@ -34,7 +31,6 @@ public class WatchdogCycleRunnerTests
             snapshot.ConnectionStatus.ShouldBe(WatchdogConnectionStatus.Connected);
             snapshot.DisconnectedReason.ShouldBe(WatchdogDisconnectedReason.None);
             snapshot.LatencyMs.ShouldBe(42);
-            explorerWriter.States.ShouldBe([ExplorerVisualState.Connected]);
             snapshot.ImportantMessages.ShouldContain(message =>
                 message.Message.Contains("connected", StringComparison.OrdinalIgnoreCase));
         }
@@ -48,11 +44,9 @@ public class WatchdogCycleRunnerTests
     public async Task RunAsync_WhenAppIsNotRunning_SetsDisconnectedAndSkipsHealthProbe()
     {
         var store = new InMemoryWatchdogStatusStore();
-        var explorerWriter = new RecordingExplorerWriter();
         var healthProbe = new RecordingHealthProbe(WatchdogHealthProbeResult.Connected(12));
         var runner = CreateRunner(
             store,
-            explorerWriter,
             appRunning: false,
             cleanupResult: new WatchdogPendingCleanupResult(WatchdogPendingCleanupOutcome.None),
             healthProbe: healthProbe);
@@ -65,7 +59,6 @@ public class WatchdogCycleRunnerTests
             snapshot.ConnectionStatus.ShouldBe(WatchdogConnectionStatus.Disconnected);
             snapshot.DisconnectedReason.ShouldBe(WatchdogDisconnectedReason.AppNotRunning);
             healthProbe.CallCount.ShouldBe(0);
-            explorerWriter.States.ShouldBe([ExplorerVisualState.Disconnected]);
         }
         finally
         {
@@ -77,13 +70,11 @@ public class WatchdogCycleRunnerTests
     public async Task RunAsync_WhenHealthFailsThenRecovers_PersistsTransitionMessages()
     {
         var store = new InMemoryWatchdogStatusStore();
-        var explorerWriter = new RecordingExplorerWriter();
         var healthProbe = new RecordingHealthProbe(
             WatchdogHealthProbeResult.Disconnected(WatchdogDisconnectedReason.ServerUnreachable),
             WatchdogHealthProbeResult.Connected(18));
         var runner = CreateRunner(
             store,
-            explorerWriter,
             appRunning: true,
             cleanupResult: new WatchdogPendingCleanupResult(WatchdogPendingCleanupOutcome.None),
             healthProbe: healthProbe);
@@ -103,7 +94,6 @@ public class WatchdogCycleRunnerTests
             connected.ImportantMessages.Count.ShouldBe(2);
             connected.ImportantMessages[0].Message.Contains("connected", StringComparison.OrdinalIgnoreCase).ShouldBeTrue();
             connected.ImportantMessages[1].Message.Contains("server", StringComparison.OrdinalIgnoreCase).ShouldBeTrue();
-            explorerWriter.States.ShouldBe([ExplorerVisualState.Disconnected, ExplorerVisualState.Connected]);
         }
         finally
         {
@@ -125,10 +115,8 @@ public class WatchdogCycleRunnerTests
                 new(DateTimeOffset.UtcNow.AddMinutes(-2), "msg-5")
             ]
         });
-        var explorerWriter = new RecordingExplorerWriter();
         var runner = CreateRunner(
             store,
-            explorerWriter,
             appRunning: true,
             cleanupResult: new WatchdogPendingCleanupResult(
                 WatchdogPendingCleanupOutcome.Failed,
@@ -154,7 +142,6 @@ public class WatchdogCycleRunnerTests
     public async Task RunAsync_PersistsCleanupOutcomeAcrossCycles()
     {
         var store = new InMemoryWatchdogStatusStore();
-        var explorerWriter = new RecordingExplorerWriter();
         var cleanup = new SequencedCleanupProcessor(
             new WatchdogPendingCleanupResult(WatchdogPendingCleanupOutcome.DeletedFolder, "cleanup-success"),
             new WatchdogPendingCleanupResult(WatchdogPendingCleanupOutcome.ExpiredMarkerRemoved, "cleanup-expired"));
@@ -162,7 +149,6 @@ public class WatchdogCycleRunnerTests
             new StaticAppLivenessProbe(true),
             cleanup,
             new RecordingHealthProbe(WatchdogHealthProbeResult.Connected(12)),
-            explorerWriter,
             store,
             NullLogger<WatchdogCycleRunner>.Instance,
             new FakeTimeProvider());
@@ -199,7 +185,6 @@ public class WatchdogCycleRunnerTests
 
     private static WatchdogCycleRunner CreateRunner(
         InMemoryWatchdogStatusStore store,
-        RecordingExplorerWriter explorerWriter,
         bool appRunning,
         WatchdogPendingCleanupResult cleanupResult,
         WatchdogHealthProbeResult? healthProbeResult = null,
@@ -209,7 +194,6 @@ public class WatchdogCycleRunnerTests
             new StaticAppLivenessProbe(appRunning),
             new StaticCleanupProcessor(cleanupResult),
             healthProbe ?? new RecordingHealthProbe(healthProbeResult ?? WatchdogHealthProbeResult.Connected(10)),
-            explorerWriter,
             store,
             NullLogger<WatchdogCycleRunner>.Instance,
             new FakeTimeProvider());
@@ -282,17 +266,6 @@ public class WatchdogCycleRunnerTests
 
         public WatchdogPendingCleanupResult Process() =>
             _results.Count > 1 ? _results.Dequeue() : _results.Peek();
-    }
-
-    private sealed class RecordingExplorerWriter : IExplorerConnectionStateWriter
-    {
-        public List<ExplorerVisualState> States { get; } = [];
-
-        public Task SetStateAsync(ExplorerVisualState state, string syncRootPath, CancellationToken ct = default)
-        {
-            States.Add(state);
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class FakeTimeProvider : TimeProvider

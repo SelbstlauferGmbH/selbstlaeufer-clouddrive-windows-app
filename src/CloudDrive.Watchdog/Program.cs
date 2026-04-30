@@ -1,6 +1,5 @@
 using CloudDrive.Core.Configuration;
 using CloudDrive.Core.Localization;
-using CloudDrive.Core.SyncRoot;
 using CloudDrive.Core.Watchdog;
 using CloudDrive.Watchdog;
 using Microsoft.Extensions.Logging;
@@ -54,14 +53,7 @@ try
         builder.AddSerilog(Log.Logger, dispose: false);
     });
 
-    SyncRootAccountIdResolver.TryResolve(settings, out var accountId);
-
     var appLivenessProbe = new NamedEventWatchdogAppLivenessProbe();
-
-    var explorerStatusManager = new ExplorerStatusManager(
-        loggerFactory.CreateLogger<ExplorerStatusManager>(),
-        accountId == null ? null : new SyncRootRegistrar(loggerFactory.CreateLogger<SyncRootRegistrar>()),
-        accountId);
 
     var runner = new WatchdogCycleRunner(
         appLivenessProbe,
@@ -69,7 +61,6 @@ try
         new WebDavWatchdogHealthProbe(
             loggerFactory,
             loggerFactory.CreateLogger<WebDavWatchdogHealthProbe>()),
-        explorerStatusManager,
         new FileWatchdogStatusStore(loggerFactory.CreateLogger<FileWatchdogStatusStore>()),
         loggerFactory.CreateLogger<WatchdogCycleRunner>());
 

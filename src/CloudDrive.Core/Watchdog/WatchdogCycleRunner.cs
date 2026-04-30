@@ -1,6 +1,5 @@
 using CloudDrive.Core.Configuration;
 using CloudDrive.Core.Localization;
-using CloudDrive.Core.SyncRoot;
 using Microsoft.Extensions.Logging;
 
 namespace CloudDrive.Core.Watchdog;
@@ -12,7 +11,6 @@ public sealed class WatchdogCycleRunner
     private readonly IWatchdogAppLivenessProbe _appLivenessProbe;
     private readonly IWatchdogPendingCleanupProcessor _pendingCleanupProcessor;
     private readonly IWatchdogHealthProbe _healthProbe;
-    private readonly IExplorerConnectionStateWriter _explorerStateWriter;
     private readonly IWatchdogStatusStore _statusStore;
     private readonly ILogger<WatchdogCycleRunner> _logger;
     private readonly TimeProvider _timeProvider;
@@ -21,7 +19,6 @@ public sealed class WatchdogCycleRunner
         IWatchdogAppLivenessProbe appLivenessProbe,
         IWatchdogPendingCleanupProcessor pendingCleanupProcessor,
         IWatchdogHealthProbe healthProbe,
-        IExplorerConnectionStateWriter explorerStateWriter,
         IWatchdogStatusStore statusStore,
         ILogger<WatchdogCycleRunner> logger,
         TimeProvider? timeProvider = null)
@@ -29,7 +26,6 @@ public sealed class WatchdogCycleRunner
         _appLivenessProbe = appLivenessProbe;
         _pendingCleanupProcessor = pendingCleanupProcessor;
         _healthProbe = healthProbe;
-        _explorerStateWriter = explorerStateWriter;
         _statusStore = statusStore;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -70,7 +66,6 @@ public sealed class WatchdogCycleRunner
             snapshot.ConnectionStatus = WatchdogConnectionStatus.Disconnected;
             snapshot.DisconnectedReason = WatchdogDisconnectedReason.AppNotRunning;
             snapshot.ReasonDetail = AppLocalizer.Instance.GetString("Watchdog_Status_AppNotRunning");
-            await WriteExplorerStateAsync(ExplorerVisualState.Disconnected, settings.SyncRootPath, snapshot, now);
             AppendStateMessageIfNeeded(previous, snapshot, now);
             _statusStore.Save(snapshot);
             return snapshot;
@@ -96,35 +91,9 @@ public sealed class WatchdogCycleRunner
         snapshot.ReasonDetail = healthResult.Detail;
         snapshot.LatencyMs = healthResult.LatencyMs;
 
-        var explorerState = healthResult.IsConnected
-            ? ExplorerVisualState.Connected
-            : ExplorerVisualState.Disconnected;
-        await WriteExplorerStateAsync(explorerState, settings.SyncRootPath, snapshot, now);
-
         AppendStateMessageIfNeeded(previous, snapshot, now);
         _statusStore.Save(snapshot);
         return snapshot;
-    }
-
-    private async Task WriteExplorerStateAsync(
-        ExplorerVisualState state,
-        string syncRootPath,
-        WatchdogStatusSnapshot snapshot,
-        DateTimeOffset timestamp)
-    {
-        try
-        {
-            await _explorerStateWriter.SetStateAsync(state, syncRootPath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to update Explorer status to {State}", state);
-            AppendImportantMessage(
-                snapshot,
-                new WatchdogImportantMessage(
-                    timestamp,
-                    AppLocalizer.Instance.GetString("Watchdog_Message_ExplorerUpdateFailed")));
-        }
     }
 
     private static void AppendImportantMessage(
